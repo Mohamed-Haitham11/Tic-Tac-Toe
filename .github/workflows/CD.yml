@@ -22,7 +22,7 @@ jobs:
 
     - name: Build project
       run: |
-        g++ src/*.cpp -Iinclude -o tictactoe
+        g++ *.cpp -o tictactoe
 
     - name: Run simple test
       run: |
