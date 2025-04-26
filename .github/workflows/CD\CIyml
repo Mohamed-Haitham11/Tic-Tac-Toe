@@ -1,71 +1,29 @@
-name: C++ CI/CD Pipeline
+name: TicTacToe-CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, master ]
+    branches:
+      - main
 
 jobs:
-  build-and-test:
-    name: Build and Test
+  build:
+
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Set up environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake
-        
-    - name: Create build directory
-      run: mkdir -p build && cd build
-      
-    - name: Configure with CMake
-      run: cmake ..
-      continue-on-error: false
-      
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: sudo apt-get install -y build-essential
+
     - name: Build project
-      run: cmake --build .
-      continue-on-error: false
-      
+      run: |
+        g++ -o tictactoe main.cpp
+
     - name: Run tests
-      run: ctest --output-on-failure
-      continue-on-error: false
-      
-  deploy:
-    name: Deploy
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Build release version
       run: |
-        mkdir -p build && cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        cmake --build .
-      continue-on-error: false
-        
-    - name: Verify executable exists
-      run: |
-        if [ ! -f build/my-executable ]; then
-          echo "::error::Executable not found!"
-          exit 1
-        fi
-        
-    - name: Package artifacts
-      run: |
-        tar -czvf binary-release.tar.gz build/my-executable
-      continue-on-error: false
-        
-    - name: Upload release artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: executable-binary
-        path: binary-release.tar.gz
+        ./tictactoe
