@@ -1,9 +1,8 @@
-name: C++ CI/CD Pipeline with GitHub Releases
+name: C++ CI/CD Pipeline
 
 on:
   push:
     branches: [ main, master ]
-    tags: [ 'v*.*.*' ]  # Trigger release deployment on semantic version tags
   pull_request:
     branches: [ main, master ]
 
@@ -33,62 +32,8 @@ jobs:
     - name: Run tests
       run: ctest --output-on-failure
       
-  package-release:
-    name: Package Release
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Build release version
-      run: |
-        mkdir build && cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        cmake --build .
-        
-    - name: Package artifacts
-      run: |
-        mkdir -p release
-        cp build/my-executable release/  # Adjust to your executable name
-        tar -czvf binary-release.tar.gz release/
-        
-    - name: Upload release artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: release-package
-        path: binary-release.tar.gz
-        
-  create-github-release:
-    name: Create GitHub Release
-    needs: package-release
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    
-    steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: release-package
-        
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref }}
-        name: Release ${{ github.ref_name }}
-        body: |
-          Automated release of ${{ github.ref_name }}
-          
-          Changes included in this version:
-          ${{ github.event.commits[0].message }}
-        files: binary-release.tar.gz
-        draft: false
-        prerelease: false
-        
   deploy:
-    name: Deploy Artifacts
+    name: Deploy
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -107,7 +52,7 @@ jobs:
       run: |
         tar -czvf binary-release.tar.gz build/my-executable
         
-    - name: Upload build artifact
+    - name: Upload release artifact
       uses: actions/upload-artifact@v3
       with:
         name: executable-binary
