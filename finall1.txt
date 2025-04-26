@@ -1,0 +1,837 @@
+#include QApplication
+#include QMainWindow
+#include QPushButton
+#include QMessageBox
+#include QVBoxLayout
+#include QHBoxLayout
+#include QGridLayout
+#include QLabel
+#include QButtonGroup
+#include QTimer
+#include QLineEdit
+#include QStackedWidget
+#include QFont
+#include QSpinBox
+#include vector
+#include algorithm
+#include limits
+#include random
+
+class TicTacToe  public QMainWindow {
+    Q_OBJECT
+
+public
+    TicTacToe(QWidget parent = nullptr)  QMainWindow(parent) {
+        setupUI();
+        resetGame();
+        applyStyleSheet();  Apply initial style
+    }
+
+private slots
+    void handleButtonClick(int index) {
+        if (board[index] != EMPTY  (mode == 2 && currentPlayer == PLAYER1)) return;
+        makeMove(index);
+    }
+
+    void setPlayerVsPlayer() {
+        mode = 1;
+        stackedWidget-setCurrentIndex(5);  Go to game settings screen
+    }
+
+    void setPlayerVsAI() {
+        mode = 2;
+        stackedWidget-setCurrentIndex(5);  Go to game settings screen
+    }
+
+    void setDifficultyEasy() {
+        difficulty = 1;
+        stackedWidget-setCurrentIndex(5);  Go to game settings screen
+    }
+
+    void setDifficultyMedium() {
+        difficulty = 2;
+        stackedWidget-setCurrentIndex(5);  Go to game settings screen
+    }
+
+    void setDifficultyHard() {
+        difficulty = 3;
+        stackedWidget-setCurrentIndex(5);  Go to game settings screen
+    }
+
+    void handleLogin() {
+        QString username = usernameEdit-text();
+        QString password = passwordEdit-text();
+
+        if (username.isEmpty()  password.isEmpty()) {
+            QMessageBoxwarning(this, Login Failed, Username and password cannot be empty!);
+            return;
+        }
+
+        loggedInUser = username;
+        stackedWidget-setCurrentIndex(1);  Go to mode selection screen
+    }
+
+    void startPvPWithNames() {
+        QString player2InputName = player2NameEdit-text();
+        if (!player2InputName.isEmpty()) {
+            player2Name = player2InputName;
+        } else {
+            player2Name = Player 2;
+        }
+
+        player1Name = loggedInUser.isEmpty()  Player 1  loggedInUser;
+        stackedWidget-setCurrentIndex(2);  Go to game screen
+        resetGame();
+    }
+
+    void applyGameSettings() {
+        totalGames = totalGamesSpinBox-value();
+        gamesToWin = gamesToWinSpinBox-value();
+
+        if (gamesToWin  totalGames) {
+            QMessageBoxwarning(this, Invalid Settings, Games to win cannot be greater than total games!);
+            return;
+        }
+
+        if (mode == 1) {
+            stackedWidget-setCurrentIndex(4);  Go to player name input screen
+        } else {
+            stackedWidget-setCurrentIndex(2);  Go to game screen
+            player1Name = AI;
+            player2Name = loggedInUser.isEmpty()  Player  loggedInUser;
+            resetGame();
+        }
+    }
+
+    void logout() {
+        loggedInUser.clear();
+        usernameEdit-clear();
+        passwordEdit-clear();
+        stackedWidget-setCurrentIndex(0);  Go back to login screen
+    }
+
+    void backToModeSelection() {
+        player1Wins = 0;
+        player2Wins = 0;
+        ties = 0;
+        updateScoreboard();
+        stackedWidget-setCurrentIndex(1);  Go back to mode selection screen
+    }
+
+    void toggleNightMode() {
+        nightMode = !nightMode;
+        applyStyleSheet();
+
+        if (nightModeButton) {
+            nightModeButton-setText(nightMode  Day Mode  Night Mode);
+        }
+    }
+
+    void toggleScoreboard() {
+        scoreboardVisible = !scoreboardVisible;
+        scoreLabel-setVisible(scoreboardVisible);
+
+        if (scoreboardToggleButton) {
+            scoreboardToggleButton-setText(scoreboardVisible  Hide Scoreboard  Show Scoreboard);
+        }
+    }
+
+private
+    static constexpr char PLAYER1 = 'X';
+    static constexpr char PLAYER2 = 'O';
+    static constexpr char EMPTY = ' ';
+
+    int mode = 1;
+    int difficulty = 3;
+    char currentPlayer = PLAYER2;
+    stdvectorchar board;
+    QButtonGroup buttonGroup;
+    QLabel statusLabel;
+    bool firstMoveMade = false;
+    bool nightMode = false;
+    bool scoreboardVisible = false;
+    int totalGames = 3;
+    int gamesToWin = 2;
+
+     Score tracking
+    int player1Wins = 0;
+    int player2Wins = 0;
+    int ties = 0;
+    QString player1Name = AI;
+    QString player2Name = Player;
+
+     UI elements
+    QStackedWidget stackedWidget;
+    QLineEdit usernameEdit;
+    QLineEdit passwordEdit;
+    QLineEdit player2NameEdit;
+    QSpinBox totalGamesSpinBox;
+    QSpinBox gamesToWinSpinBox;
+    QString loggedInUser;
+    QLabel scoreLabel;
+    QPushButton nightModeButton;
+    QPushButton scoreboardToggleButton;
+
+    void setupUI() {
+        stackedWidget = new QStackedWidget(this);
+
+         Login Screen (Index 0)
+        QWidget loginWidget = new QWidget();
+        QVBoxLayout loginLayout = new QVBoxLayout(loginWidget);
+
+        QLabel loginTitle = new QLabel(Tic Tac Toe Login, this);
+        loginTitle-setAlignment(QtAlignCenter);
+        loginTitle-setFont(QFont(Arial, 18, QFontBold));
+
+        usernameEdit = new QLineEdit(this);
+        usernameEdit-setPlaceholderText(Username);
+        usernameEdit-setMinimumHeight(40);
+
+        passwordEdit = new QLineEdit(this);
+        passwordEdit-setPlaceholderText(Password);
+        passwordEdit-setEchoMode(QLineEditPassword);
+        passwordEdit-setMinimumHeight(40);
+
+        QPushButton loginButton = new QPushButton(Login, this);
+        loginButton-setMinimumHeight(50);
+        connect(loginButton, &QPushButtonclicked, this, &TicTacToehandleLogin);
+
+        QPushButton loginNightModeButton = new QPushButton(Night Mode, this);
+        connect(loginNightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        loginLayout-addStretch();
+        loginLayout-addWidget(loginTitle);
+        loginLayout-addSpacing(30);
+        loginLayout-addWidget(usernameEdit);
+        loginLayout-addWidget(passwordEdit);
+        loginLayout-addSpacing(30);
+        loginLayout-addWidget(loginButton);
+        loginLayout-addSpacing(20);
+        loginLayout-addWidget(loginNightModeButton);
+        loginLayout-addStretch();
+
+         Mode Selection Screen (Index 1)
+        QWidget modeSelectionWidget = new QWidget();
+        QVBoxLayout modeSelectionLayout = new QVBoxLayout(modeSelectionWidget);
+
+        QLabel modeSelectionTitle = new QLabel(Select Game Mode, this);
+        modeSelectionTitle-setAlignment(QtAlignCenter);
+        modeSelectionTitle-setFont(QFont(Arial, 24, QFontBold));
+
+        QPushButton pvpButton = new QPushButton(Player vs Player, this);
+        QPushButton pveButton = new QPushButton(Player vs AI, this);
+
+        QString bigButtonStyle = QPushButton { padding 30px; font-size 18px; font-weight bold; };
+        pvpButton-setStyleSheet(bigButtonStyle);
+        pveButton-setStyleSheet(bigButtonStyle);
+
+        connect(pvpButton, &QPushButtonclicked, this, &TicTacToesetPlayerVsPlayer);
+        connect(pveButton, &QPushButtonclicked, this, &TicTacToesetPlayerVsAI);
+
+        QLabel userWelcomeLabel = new QLabel(, this);
+        userWelcomeLabel-setAlignment(QtAlignCenter);
+        userWelcomeLabel-setFont(QFont(Arial, 14));
+
+        QPushButton logoutButtonMode = new QPushButton(Logout, this);
+        logoutButtonMode-setMaximumWidth(100);
+        connect(logoutButtonMode, &QPushButtonclicked, this, &TicTacToelogout);
+
+        QPushButton modeNightModeButton = new QPushButton(Night Mode, this);
+        modeNightModeButton-setMaximumWidth(100);
+        connect(modeNightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        modeSelectionLayout-addWidget(modeSelectionTitle);
+        modeSelectionLayout-addSpacing(40);
+        modeSelectionLayout-addWidget(pvpButton);
+        modeSelectionLayout-addSpacing(20);
+        modeSelectionLayout-addWidget(pveButton);
+        modeSelectionLayout-addSpacing(40);
+        modeSelectionLayout-addWidget(userWelcomeLabel);
+
+        QHBoxLayout modeBtnsLayout = new QHBoxLayout();
+        modeBtnsLayout-addWidget(logoutButtonMode);
+        modeBtnsLayout-addWidget(modeNightModeButton);
+        modeSelectionLayout-addLayout(modeBtnsLayout);
+
+         Game Screen (Index 2)
+        QWidget gameWidget = new QWidget();
+        QVBoxLayout mainLayout = new QVBoxLayout(gameWidget);
+
+        QHBoxLayout headerLayout = new QHBoxLayout();
+        QLabel userLabel = new QLabel(, this);
+        userLabel-setFont(QFont(Arial, 10));
+
+        QPushButton backButton = new QPushButton(Back, this);
+        backButton-setMaximumWidth(100);
+        backButton-setMinimumHeight(30);
+        connect(backButton, &QPushButtonclicked, this, &TicTacToebackToModeSelection);
+
+        scoreboardToggleButton = new QPushButton(Show Scoreboard, this);
+        scoreboardToggleButton-setMaximumWidth(150);
+        scoreboardToggleButton-setMinimumHeight(30);
+        connect(scoreboardToggleButton, &QPushButtonclicked, this, &TicTacToetoggleScoreboard);
+
+        QPushButton logoutButton = new QPushButton(Logout, this);
+        logoutButton-setMaximumWidth(100);
+        logoutButton-setMinimumHeight(30);
+        connect(logoutButton, &QPushButtonclicked, this, &TicTacToelogout);
+
+        nightModeButton = new QPushButton(Night Mode, this);
+        nightModeButton-setMaximumWidth(100);
+        nightModeButton-setMinimumHeight(30);
+        connect(nightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        headerLayout-addWidget(backButton);
+        headerLayout-addWidget(scoreboardToggleButton);
+        headerLayout-addStretch();
+        headerLayout-addWidget(userLabel);
+        headerLayout-addStretch();
+        headerLayout-addWidget(nightModeButton);
+        headerLayout-addWidget(logoutButton);
+        mainLayout-addLayout(headerLayout);
+
+        scoreLabel = new QLabel(this);
+        scoreLabel-setAlignment(QtAlignCenter);
+        scoreLabel-setFont(QFont(Arial, 14, QFontBold));
+        scoreLabel-setStyleSheet(QLabel { background-color #f0f0f0; border 1px solid #ccc; padding 10px; });
+        scoreLabel-setVisible(scoreboardVisible);
+        mainLayout-addWidget(scoreLabel);
+
+        QGridLayout gridLayout = new QGridLayout();
+        buttonGroup = new QButtonGroup(this);
+
+        for (int i = 0; i  9; i++) {
+            QPushButton button = new QPushButton(, this);
+            button-setSizePolicy(QSizePolicyExpanding, QSizePolicyExpanding);
+            button-setMinimumSize(100, 100);
+            button-setFont(QFont(Arial, 36, QFontBold));
+            button-setStyleSheet(QPushButton { border 2px solid #aaa; });
+            gridLayout-addWidget(button, i  3, i % 3);
+            buttonGroup-addButton(button, i);
+        }
+
+        connect(buttonGroup, &QButtonGroupbuttonClicked,
+                this, [this](QAbstractButton button) {
+                    handleButtonClick(buttonGroup-id(button));
+                });
+
+        mainLayout-addLayout(gridLayout);
+
+        statusLabel = new QLabel(Player O's turn, this);
+        statusLabel-setAlignment(QtAlignCenter);
+        statusLabel-setFont(QFont(Arial, 16));
+        mainLayout-addWidget(statusLabel);
+
+         Difficulty Selection Screen (Index 3)
+        QWidget difficultyWidget = new QWidget();
+        QVBoxLayout difficultyLayout = new QVBoxLayout(difficultyWidget);
+
+        QLabel difficultyTitle = new QLabel(Select AI Difficulty, this);
+        difficultyTitle-setAlignment(QtAlignCenter);
+        difficultyTitle-setFont(QFont(Arial, 24, QFontBold));
+
+        QPushButton easyButton = new QPushButton(Easy, this);
+        QPushButton mediumButton = new QPushButton(Medium, this);
+        QPushButton hardButton = new QPushButton(Hard, this);
+
+        easyButton-setStyleSheet(bigButtonStyle);
+        mediumButton-setStyleSheet(bigButtonStyle);
+        hardButton-setStyleSheet(bigButtonStyle);
+
+        connect(easyButton, &QPushButtonclicked, this, &TicTacToesetDifficultyEasy);
+        connect(mediumButton, &QPushButtonclicked, this, &TicTacToesetDifficultyMedium);
+        connect(hardButton, &QPushButtonclicked, this, &TicTacToesetDifficultyHard);
+
+        QPushButton backButtonDiff = new QPushButton(Back, this);
+        backButtonDiff-setMaximumWidth(100);
+        connect(backButtonDiff, &QPushButtonclicked, this, &TicTacToebackToModeSelection);
+
+        QPushButton diffNightModeButton = new QPushButton(Night Mode, this);
+        diffNightModeButton-setMaximumWidth(100);
+        connect(diffNightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        difficultyLayout-addWidget(difficultyTitle);
+        difficultyLayout-addSpacing(40);
+        difficultyLayout-addWidget(easyButton);
+        difficultyLayout-addSpacing(20);
+        difficultyLayout-addWidget(mediumButton);
+        difficultyLayout-addSpacing(20);
+        difficultyLayout-addWidget(hardButton);
+        difficultyLayout-addSpacing(40);
+
+        QHBoxLayout diffBtnsLayout = new QHBoxLayout();
+        diffBtnsLayout-addWidget(backButtonDiff);
+        diffBtnsLayout-addWidget(diffNightModeButton);
+        difficultyLayout-addLayout(diffBtnsLayout);
+
+         Player 2 Name Input Screen (Index 4)
+        QWidget nameInputWidget = new QWidget();
+        QVBoxLayout nameInputLayout = new QVBoxLayout(nameInputWidget);
+
+        QLabel nameInputTitle = new QLabel(Enter Player 2 Name, this);
+        nameInputTitle-setAlignment(QtAlignCenter);
+        nameInputTitle-setFont(QFont(Arial, 24, QFontBold));
+
+        QLabel nameInputSubtitle = new QLabel(Player 1 will be  + (loggedInUser.isEmpty()  QString(Player 1)  loggedInUser), this);
+        nameInputSubtitle-setAlignment(QtAlignCenter);
+        nameInputSubtitle-setFont(QFont(Arial, 16));
+
+        player2NameEdit = new QLineEdit(this);
+        player2NameEdit-setPlaceholderText(Enter name for Player 2);
+        player2NameEdit-setMinimumHeight(50);
+        player2NameEdit-setFont(QFont(Arial, 14));
+
+        QPushButton startGameButton = new QPushButton(Start Game, this);
+        startGameButton-setMinimumHeight(60);
+        startGameButton-setFont(QFont(Arial, 16, QFontBold));
+        connect(startGameButton, &QPushButtonclicked, this, &TicTacToestartPvPWithNames);
+
+        QPushButton backButtonName = new QPushButton(Back, this);
+        backButtonName-setMaximumWidth(100);
+        connect(backButtonName, &QPushButtonclicked, this, &TicTacToebackToModeSelection);
+
+        QPushButton nameNightModeButton = new QPushButton(Night Mode, this);
+        nameNightModeButton-setMaximumWidth(100);
+        connect(nameNightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        nameInputLayout-addWidget(nameInputTitle);
+        nameInputLayout-addSpacing(20);
+        nameInputLayout-addWidget(nameInputSubtitle);
+        nameInputLayout-addSpacing(40);
+        nameInputLayout-addWidget(player2NameEdit);
+        nameInputLayout-addSpacing(40);
+        nameInputLayout-addWidget(startGameButton);
+        nameInputLayout-addSpacing(40);
+
+        QHBoxLayout nameBtnsLayout = new QHBoxLayout();
+        nameBtnsLayout-addWidget(backButtonName);
+        nameBtnsLayout-addWidget(nameNightModeButton);
+        nameInputLayout-addLayout(nameBtnsLayout);
+
+         Game Settings Screen (Index 5)
+        QWidget settingsWidget = new QWidget();
+        QVBoxLayout settingsLayout = new QVBoxLayout(settingsWidget);
+
+        QLabel settingsTitle = new QLabel(Game Settings, this);
+        settingsTitle-setAlignment(QtAlignCenter);
+        settingsTitle-setFont(QFont(Arial, 24, QFontBold));
+
+         Total games input
+        QHBoxLayout totalGamesLayout = new QHBoxLayout();
+        QLabel totalGamesLabel = new QLabel(Total Games, this);
+        totalGamesLabel-setFont(QFont(Arial, 14));
+        totalGamesSpinBox = new QSpinBox(this);
+        totalGamesSpinBox-setRange(1, 10);
+        totalGamesSpinBox-setValue(totalGames);
+        totalGamesSpinBox-setMinimumHeight(40);
+        totalGamesLayout-addWidget(totalGamesLabel);
+        totalGamesLayout-addWidget(totalGamesSpinBox);
+
+         Games to win input
+        QHBoxLayout gamesToWinLayout = new QHBoxLayout();
+        QLabel gamesToWinLabel = new QLabel(Games to Win, this);
+        gamesToWinLabel-setFont(QFont(Arial, 14));
+        gamesToWinSpinBox = new QSpinBox(this);
+        gamesToWinSpinBox-setRange(1, 10);
+        gamesToWinSpinBox-setValue(gamesToWin);
+        gamesToWinSpinBox-setMinimumHeight(40);
+        gamesToWinLayout-addWidget(gamesToWinLabel);
+        gamesToWinLayout-addWidget(gamesToWinSpinBox);
+
+        QPushButton applySettingsButton = new QPushButton(Apply Settings, this);
+        applySettingsButton-setMinimumHeight(60);
+        applySettingsButton-setFont(QFont(Arial, 16, QFontBold));
+        connect(applySettingsButton, &QPushButtonclicked, this, &TicTacToeapplyGameSettings);
+
+        QPushButton backButtonSettings = new QPushButton(Back, this);
+        backButtonSettings-setMaximumWidth(100);
+        connect(backButtonSettings, &QPushButtonclicked, this, &TicTacToebackToModeSelection);
+
+        QPushButton settingsNightModeButton = new QPushButton(Night Mode, this);
+        settingsNightModeButton-setMaximumWidth(100);
+        connect(settingsNightModeButton, &QPushButtonclicked, this, &TicTacToetoggleNightMode);
+
+        settingsLayout-addWidget(settingsTitle);
+        settingsLayout-addSpacing(40);
+        settingsLayout-addLayout(totalGamesLayout);
+        settingsLayout-addSpacing(20);
+        settingsLayout-addLayout(gamesToWinLayout);
+        settingsLayout-addSpacing(40);
+        settingsLayout-addWidget(applySettingsButton);
+        settingsLayout-addSpacing(40);
+
+        QHBoxLayout settingsBtnsLayout = new QHBoxLayout();
+        settingsBtnsLayout-addWidget(backButtonSettings);
+        settingsBtnsLayout-addWidget(settingsNightModeButton);
+        settingsLayout-addLayout(settingsBtnsLayout);
+
+         Add all widgets to stacked widget
+        stackedWidget-addWidget(loginWidget);          Index 0
+        stackedWidget-addWidget(modeSelectionWidget);  Index 1
+        stackedWidget-addWidget(gameWidget);           Index 2
+        stackedWidget-addWidget(difficultyWidget);     Index 3
+        stackedWidget-addWidget(nameInputWidget);      Index 4
+        stackedWidget-addWidget(settingsWidget);       Index 5
+
+        setCentralWidget(stackedWidget);
+        setWindowTitle(Tic Tac Toe);
+    }
+
+    void applyStyleSheet() {
+        if (nightMode) {
+            QString darkStyle = QWidget { background-color #2D2D2D; color #E0E0E0; }
+                                QLabel { color #E0E0E0; }
+                                QLineEdit { background-color #3D3D3D; color #E0E0E0; border 1px solid #5D5D5D; border-radius 4px; padding 5px; }
+                                QPushButton { background-color #3D3D3D; color #E0E0E0; border 1px solid #5D5D5D; border-radius 4px; padding 8px; }
+                                QPushButtonhover { background-color #4D4D4D; }
+                                QPushButtonpressed { background-color #5D5D5D; }
+                                QSpinBox { background-color #3D3D3D; color #E0E0E0; border 1px solid #5D5D5D; border-radius 4px; padding 5px; };
+
+            setStyleSheet(darkStyle);
+
+            for (int i = 0; i  9; i++) {
+                QPushButton button = qobject_castQPushButton (buttonGroup-button(i));
+                if (button) {
+                    button-setStyleSheet(QPushButton { background-color #222222; color #E0E0E0; border 2px solid #555555; font-weight bold; });
+                }
+            }
+
+            scoreLabel-setStyleSheet(QLabel { background-color #3D3D3D; color #E0E0E0; border 1px solid #555555; padding 10px; });
+
+        } else {
+            QString lightStyle = QWidget { background-color #F5F5F5; color #333333; }
+                                 QLabel { color #333333; }
+                                 QLineEdit { background-color #FFFFFF; color #333333; border 1px solid #CCCCCC; border-radius 4px; padding 5px; }
+                                 QPushButton { background-color #FFFFFF; color #333333; border 1px solid #CCCCCC; border-radius 4px; padding 8px; }
+                                 QPushButtonhover { background-color #EEEEEE; }
+                                 QPushButtonpressed { background-color #DDDDDD; }
+                                 QSpinBox { background-color #FFFFFF; color #333333; border 1px solid #CCCCCC; border-radius 4px; padding 5px; };
+
+            setStyleSheet(lightStyle);
+
+            for (int i = 0; i  9; i++) {
+                QPushButton button = qobject_castQPushButton (buttonGroup-button(i));
+                if (button) {
+                    button-setStyleSheet(QPushButton { background-color #FFFFFF; color #333333; border 2px solid #AAAAAA; font-weight bold; });
+                }
+            }
+
+            scoreLabel-setStyleSheet(QLabel { background-color #F0F0F0; color #333333; border 1px solid #CCCCCC; padding 10px; });
+        }
+
+        if (nightModeButton) {
+            nightModeButton-setText(nightMode  Day Mode  Night Mode);
+        }
+    }
+
+    void updateScoreboard() {
+        QString scoreText = QString(table width='100%'
+                                    trth align='left'%1 (X)thth align='center'Tiesthth align='right'%2 (O)thtr
+                                    trtd align='left'b%3btdtd align='center'b%4btdtd align='right'b%5btdtr
+                                    trtd colspan='3' align='center'Best of %6 (First to %7)tdtr
+                                    table)
+                                .arg(player1Name)
+                                .arg(player2Name)
+                                .arg(player1Wins)
+                                .arg(ties)
+                                .arg(player2Wins)
+                                .arg(totalGames)
+                                .arg(gamesToWin);
+        scoreLabel-setText(scoreText);
+    }
+
+    void resetGame() {
+         Check if the series is already over
+        if (player1Wins = gamesToWin  player2Wins = gamesToWin 
+            (player1Wins + player2Wins + ties) = totalGames) {
+            backToModeSelection();
+            return;
+        }
+
+        board = stdvectorchar(9, EMPTY);
+        firstMoveMade = false;
+
+        scoreboardVisible = false;
+        scoreLabel-setVisible(scoreboardVisible);
+        if (scoreboardToggleButton) {
+            scoreboardToggleButton-setText(Show Scoreboard);
+        }
+
+        if (mode == 2) {
+            player1Name = AI;
+            player2Name = loggedInUser.isEmpty()  Player  loggedInUser;
+        }
+
+        updateScoreboard();
+
+        stdrandom_device rd;
+        stdmt19937 gen(rd());
+        if (gen() % 2 == 0) {
+            currentPlayer = PLAYER1;
+            if (mode == 2) {
+                QTimersingleShot(500, this, [this]() { makeAIMove(); });
+            }
+        } else {
+            currentPlayer = PLAYER2;
+        }
+
+        for (int i = 0; i  9; i++) {
+            QPushButton button = qobject_castQPushButton (buttonGroup-button(i));
+            if (button) {
+                button-setText();
+                button-setEnabled(true);
+            }
+        }
+
+        updateStatus();
+    }
+
+    void updateBoard() {
+        for (int i = 0; i  9; i++) {
+            QPushButton button = qobject_castQPushButton (buttonGroup-button(i));
+            if (button) {
+                button-setText(board[i] == EMPTY    QString(board[i]));
+            }
+        }
+    }
+
+    void updateStatus() {
+        QString playerName = (currentPlayer == PLAYER1)  player1Name  player2Name;
+        if (!loggedInUser.isEmpty()) {
+            statusLabel-setText(QString(%1's turn (%2)).arg(playerName).arg(currentPlayer));
+        } else {
+            statusLabel-setText(QString(Player %1's turn).arg(currentPlayer));
+        }
+    }
+
+    void makeMove(int index) {
+        if (board[index] != EMPTY) return;
+
+        board[index] = currentPlayer;
+        updateBoard();
+
+        if (checkWin(currentPlayer)) {
+            if (currentPlayer == PLAYER1) player1Wins++;
+            else player2Wins++;
+            updateScoreboard();
+
+             Check if either player has won the series
+            if (player1Wins = gamesToWin  player2Wins = gamesToWin) {
+                QString winner = player1Wins = gamesToWin  player1Name  player2Name;
+                gameOver(QString(%1 wins the series %2-%3!)
+                             .arg(winner)
+                             .arg(qMax(player1Wins, player2Wins))
+                             .arg(qMin(player1Wins, player2Wins)), true);
+                return;
+            }
+
+             Check if maximum games reached
+            if ((player1Wins + player2Wins + ties) = totalGames) {
+                if (player1Wins  player2Wins) {
+                    gameOver(QString(%1 wins the series %2-%3!)
+                                 .arg(player1Name)
+                                 .arg(player1Wins)
+                                 .arg(player2Wins), true);
+                } else if (player2Wins  player1Wins) {
+                    gameOver(QString(%1 wins the series %2-%3!)
+                                 .arg(player2Name)
+                                 .arg(player2Wins)
+                                 .arg(player1Wins), true);
+                } else {
+                    gameOver(Series ended in a tie!, true);
+                }
+                return;
+            }
+
+            gameOver(QString(%1 (%2) wins!).arg(currentPlayer == PLAYER1  player1Name  player2Name).arg(currentPlayer));
+            return;
+        }
+
+        if (checkTie()) {
+            ties++;
+            updateScoreboard();
+
+             Check if maximum games reached
+            if ((player1Wins + player2Wins + ties) = totalGames) {
+                if (player1Wins  player2Wins) {
+                    gameOver(QString(%1 wins the series %2-%3!)
+                                 .arg(player1Name)
+                                 .arg(player1Wins)
+                                 .arg(player2Wins), true);
+                } else if (player2Wins  player1Wins) {
+                    gameOver(QString(%1 wins the series %2-%3!)
+                                 .arg(player2Name)
+                                 .arg(player2Wins)
+                                 .arg(player1Wins), true);
+                } else {
+                    gameOver(Series ended in a tie!, true);
+                }
+                return;
+            }
+
+            gameOver(It's a tie!);
+            return;
+        }
+
+        currentPlayer = (currentPlayer == PLAYER1)  PLAYER2  PLAYER1;
+        updateStatus();
+
+        if (mode == 2 && currentPlayer == PLAYER1) {
+            QTimersingleShot(500, this, [this]() { makeAIMove(); });
+        }
+    }
+
+    void gameOver(const QString &message, bool seriesOver = false) {
+        statusLabel-setText(message);
+
+        if (!scoreboardVisible) {
+            toggleScoreboard();
+        }
+
+        for (int i = 0; i  9; i++) {
+            QPushButton button = qobject_castQPushButton (buttonGroup-button(i));
+            if (button) {
+                button-setEnabled(false);
+            }
+        }
+
+        if (seriesOver) {
+            QTimersingleShot(3000, this, &TicTacToebackToModeSelection);
+        } else {
+            QTimersingleShot(2000, this, &TicTacToeresetGame);
+        }
+    }
+
+    void makeAIMove() {
+        if (difficulty == 1) {
+            easyMove();
+        } else if (difficulty == 2) {
+            mediumMove();
+        } else {
+            hardMove();
+        }
+    }
+
+    void easyMove() {
+        stdvectorint emptySlots;
+        for (int i = 0; i  9; i++) {
+            if (board[i] == EMPTY) {
+                emptySlots.push_back(i);
+            }
+        }
+
+        if (!emptySlots.empty()) {
+            stdrandom_device rd;
+            stdmt19937 gen(rd());
+            stduniform_int_distribution dis(0, emptySlots.size() - 1);
+            int index = emptySlots[dis(gen)];
+            makeMove(index);
+        }
+    }
+
+    void mediumMove() {
+        stdrandom_device rd;
+        stdmt19937 gen(rd());
+        stduniform_int_distribution dis(0, 100);
+
+        if (dis(gen)  50) {
+            hardMove();
+        } else {
+            easyMove();
+        }
+    }
+
+    void hardMove() {
+        int bestScore = stdnumeric_limitsintmin();
+        int bestMove = -1;
+
+        for (int i = 0; i  9; i++) {
+            if (board[i] == EMPTY) {
+                board[i] = PLAYER1;
+                int score = minimax(0, false);
+                board[i] = EMPTY;
+
+                if (score  bestScore) {
+                    bestScore = score;
+                    bestMove = i;
+                }
+            }
+        }
+
+        if (bestMove != -1) {
+            makeMove(bestMove);
+        }
+    }
+
+    int minimax(int depth, bool isMaximizing) {
+        if (checkWin(PLAYER1)) return 10 - depth;
+        if (checkWin(PLAYER2)) return depth - 10;
+        if (checkTie()) return 0;
+
+        if (isMaximizing) {
+            int bestScore = stdnumeric_limitsintmin();
+            for (int i = 0; i  9; i++) {
+                if (board[i] == EMPTY) {
+                    board[i] = PLAYER1;
+                    int score = minimax(depth + 1, false);
+                    board[i] = EMPTY;
+                    bestScore = stdmax(score, bestScore);
+                }
+            }
+            return bestScore;
+        } else {
+            int bestScore = stdnumeric_limitsintmax();
+            for (int i = 0; i  9; i++) {
+                if (board[i] == EMPTY) {
+                    board[i] = PLAYER2;
+                    int score = minimax(depth + 1, true);
+                    board[i] = EMPTY;
+                    bestScore = stdmin(score, bestScore);
+                }
+            }
+            return bestScore;
+        }
+    }
+
+    bool checkWin(char player) {
+        for (int i = 0; i  3; i++) {
+            if (board[i3] == player && board[i3+1] == player && board[i3+2] == player) {
+                return true;
+            }
+        }
+
+        for (int i = 0; i  3; i++) {
+            if (board[i] == player && board[i+3] == player && board[i+6] == player) {
+                return true;
+            }
+        }
+
+        if (board[0] == player && board[4] == player && board[8] == player) {
+            return true;
+        }
+        if (board[2] == player && board[4] == player && board[6] == player) {
+            return true;
+        }
+
+        return false;
+    }
+
+    bool checkTie() {
+        for (int i = 0; i  9; i++) {
+            if (board[i] == EMPTY) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+#include main.moc
+
+int main(int argc, char argv[]) {
+    QApplication app(argc, argv);
+    TicTacToe game;
+    game.resize(600, 700);
+    game.show();
+    return app.exec();
+}
