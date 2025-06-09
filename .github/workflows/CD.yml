@@ -1,45 +1,90 @@
-name: Qt C++ CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ main ]
+  release:
+    types: [created]
 
 jobs:
-  build-release:
+  linux-build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v2
+    
+    - name: Set up Qt
+      uses: jurplel/install-qt-action@v2
+      with:
+        version: '6.5.0'
+        host: linux
+        target: desktop
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libgl1-mesa-dev clang-tidy
+        
+    - name: Set up database
+      run: |
+        touch tictactoe.db
+        chmod 777 tictactoe.db
+        
+    - name: Configure project
+      run: |
+        qmake Patience.pro
+        
+    - name: Build project
+      run: |
+        make -j$(nproc)
+        
+    - name: Run static analysis
+      run: |
+        clang-tidy --quiet $(find . -name '*.cpp' -or -name '*.h')
+        
+    - name: Create AppImage (on release)
+      if: github.event_name == 'release'
+      run: |
+        # Add steps to create AppImage here
+        echo "AppImage creation would happen here"
+        
+    - name: Upload artifact
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v2
+      with:
+        name: TicTacToe-Linux
+        path: Patience
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '5.15.2'
-          host: 'linux'
-          target: 'desktop'
-          arch: 'gcc_64'
-
-      - name: Build project with qmake
-        run: |
-          qmake
-          make
-
-      - name: Show build output
-        run: ls -al
-
-      - name: Upload executable as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: QtApp
-          path: ./QtTicTacToe  # Change this if needed
-
-      - name: Create GitHub Release (only on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ./QtTicTacToe
+  windows-build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Qt
+      uses: jurplel/install-qt-action@v2
+      with:
+        version: '6.5.0'
+        host: win64
+        target: desktop
+        
+    - name: Configure project
+      run: qmake Patience.pro
+      
+    - name: Build project
+      run: jom.exe
+      
+    - name: Create installer (on release)
+      if: github.event_name == 'release'
+      run: |
+        # Add NSIS or other installer steps here
+        echo "Installer creation would happen here"
+        
+    - name: Upload artifact
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v2
+      with:
+        name: TicTacToe-Windows
+        path: Patience.exe
