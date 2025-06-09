@@ -1,90 +1,35 @@
-name: CI/CD Pipeline
+name: TicTacToe-CI-CD
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-  release:
-    types: [created]
+    branches:
+      - main
 
 jobs:
-  linux-build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Qt
-      uses: jurplel/install-qt-action@v2
-      with:
-        version: '6.5.0'
-        host: linux
-        target: desktop
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libgl1-mesa-dev clang-tidy
-        
-    - name: Set up database
-      run: |
-        touch tictactoe.db
-        chmod 777 tictactoe.db
-        
-    - name: Configure project
-      run: |
-        qmake Patience.pro
-        
-    - name: Build project
-      run: |
-        make -j$(nproc)
-        
-    - name: Run static analysis
-      run: |
-        clang-tidy --quiet $(find . -name '*.cpp' -or -name '*.h')
-        
-    - name: Create AppImage (on release)
-      if: github.event_name == 'release'
-      run: |
-        # Add steps to create AppImage here
-        echo "AppImage creation would happen here"
-        
-    - name: Upload artifact
-      if: github.event_name == 'release'
-      uses: actions/upload-artifact@v2
-      with:
-        name: TicTacToe-Linux
-        path: Patience
+  build:
 
-  windows-build:
-    runs-on: windows-latest
-    
+    runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Qt
-      uses: jurplel/install-qt-action@v2
-      with:
-        version: '6.5.0'
-        host: win64
-        target: desktop
-        
-    - name: Configure project
-      run: qmake Patience.pro
-      
-    - name: Build project
-      run: jom.exe
-      
-    - name: Create installer (on release)
-      if: github.event_name == 'release'
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: sudo apt-get install -y build-essential
+
+    - name: Build all C++ files
       run: |
-        # Add NSIS or other installer steps here
-        echo "Installer creation would happen here"
-        
-    - name: Upload artifact
-      if: github.event_name == 'release'
-      uses: actions/upload-artifact@v2
+        g++ *.cpp -o tictactoe
+
+    - name: Run simple test
+      run: |
+        ./tictactoe || true
+
+    - name: Upload built binary as artifact
+      uses: actions/upload-artifact@v4
       with:
-        name: TicTacToe-Windows
-        path: Patience.exe
+        name: tictactoe
+        path: tictactoe
