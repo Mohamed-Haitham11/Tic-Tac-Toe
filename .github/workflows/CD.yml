@@ -1,5 +1,3 @@
-# GitHub Actions Workflow for Qt App CI/CD
-
 name: Qt C++ CI/CD
 
 on:
@@ -24,6 +22,7 @@ jobs:
           version: '5.15.2'
           host: 'linux'
           target: 'desktop'
+          arch: 'gcc_64'
 
       - name: Build project with qmake
         run: |
