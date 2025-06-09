@@ -1,4 +1,4 @@
-# File: .github/workflows/qt-cpp-ci.yml
+# GitHub Actions Workflow for Qt App CI/CD
 
 name: Qt C++ CI/CD
 
@@ -22,20 +22,25 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '5.15.2'
+          host: 'linux'
+          target: 'desktop'
 
       - name: Build project with qmake
         run: |
           qmake
           make
 
+      - name: Show build output
+        run: ls -al
+
       - name: Upload executable as artifact
         uses: actions/upload-artifact@v4
         with:
           name: QtApp
-          path: ./QtTicTacToe  # replace with your binary name if different
+          path: ./QtTicTacToe  # Change this if needed
 
       - name: Create GitHub Release (only on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: ./QtTicTacToe  # replace if different
+          files: ./QtTicTacToe
