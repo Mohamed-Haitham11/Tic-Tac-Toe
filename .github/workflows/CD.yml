@@ -1,235 +1,90 @@
-name: Qt TicTacToe CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   release:
-    types: [ published ]
+    types: [created]
 
 jobs:
-  build-linux:
+  linux-build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+    - uses: actions/checkout@v2
+    
+    - name: Set up Qt
+      uses: jurplel/install-qt-action@v2
       with:
         version: '6.5.0'
-        host: 'linux'
-        target: 'desktop'
-        arch: 'gcc_64'
-        modules: 'qtsql qtwidgets'
-        
+        host: linux
+        target: desktop
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libgl1-mesa-dev
+        sudo apt-get install -y build-essential libgl1-mesa-dev clang-tidy
         
-    - name: Create build directory
-      run: mkdir build
-      
-    - name: Configure with CMake
+    - name: Set up database
       run: |
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        touch tictactoe.db
+        chmod 777 tictactoe.db
+        
+    - name: Configure project
+      run: |
+        qmake Patience.pro
         
     - name: Build project
       run: |
-        cd build
         make -j$(nproc)
         
-    - name: Run tests (if any)
+    - name: Run static analysis
       run: |
-        cd build
-        # Add test commands here when you have tests
-        # ctest --verbose
+        clang-tidy --quiet $(find . -name '*.cpp' -or -name '*.h')
         
-    - name: Package application
+    - name: Create AppImage (on release)
+      if: github.event_name == 'release'
       run: |
-        cd build
-        mkdir -p TicTacToe-Linux
-        cp TicTacToe TicTacToe-Linux/
-        # Copy Qt libraries
-        $Qt6_DIR/bin/linuxdeployqt TicTacToe-Linux/TicTacToe -appimage
+        # Add steps to create AppImage here
+        echo "AppImage creation would happen here"
         
-    - name: Upload Linux artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload artifact
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v2
       with:
         name: TicTacToe-Linux
-        path: build/TicTacToe-Linux/
+        path: Patience
 
-  build-windows:
+  windows-build:
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+    - uses: actions/checkout@v2
+    
+    - name: Set up Qt
+      uses: jurplel/install-qt-action@v2
       with:
         version: '6.5.0'
-        host: 'windows'
-        target: 'desktop'
-        arch: 'win64_msvc2019_64'
-        modules: 'qtsql qtwidgets'
+        host: win64
+        target: desktop
         
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v2
+    - name: Configure project
+      run: qmake Patience.pro
       
-    - name: Create build directory
-      run: mkdir build
-      
-    - name: Configure with CMake
-      run: |
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
-        
     - name: Build project
+      run: jom.exe
+      
+    - name: Create installer (on release)
+      if: github.event_name == 'release'
       run: |
-        cd build
-        cmake --build . --config Release
+        # Add NSIS or other installer steps here
+        echo "Installer creation would happen here"
         
-    - name: Package application
-      run: |
-        cd build
-        mkdir TicTacToe-Windows
-        copy Release\TicTacToe.exe TicTacToe-Windows\
-        $env:Qt6_DIR\bin\windeployqt.exe TicTacToe-Windows\TicTacToe.exe
-        
-    - name: Upload Windows artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload artifact
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v2
       with:
         name: TicTacToe-Windows
-        path: build/TicTacToe-Windows/
-
-  build-macos:
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.0'
-        host: 'mac'
-        target: 'desktop'
-        arch: 'clang_64'
-        modules: 'qtsql qtwidgets'
-        
-    - name: Create build directory
-      run: mkdir build
-      
-    - name: Configure with CMake
-      run: |
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        
-    - name: Build project
-      run: |
-        cd build
-        make -j$(sysctl -n hw.ncpu)
-        
-    - name: Package application
-      run: |
-        cd build
-        mkdir -p TicTacToe-macOS
-        cp -r TicTacToe.app TicTacToe-macOS/
-        $Qt6_DIR/bin/macdeployqt TicTacToe-macOS/TicTacToe.app -dmg
-        
-    - name: Upload macOS artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: TicTacToe-macOS
-        path: build/TicTacToe-macOS/
-
-  code-quality:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt and tools
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.0'
-        host: 'linux'
-        target: 'desktop'
-        arch: 'gcc_64'
-        modules: 'qtsql qtwidgets'
-        
-    - name: Install analysis tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck clang-tidy
-        
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --xml --xml-version=2 . 2> cppcheck-result.xml || true
-        
-    - name: Run clang-tidy
-      run: |
-        # Create compile_commands.json first
-        mkdir build && cd build
-        cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        cd ..
-        clang-tidy *.cpp -p build/ || true
-        
-    - name: Upload analysis results
-      uses: actions/upload-artifact@v4
-      with:
-        name: code-analysis
-        path: |
-          cppcheck-result.xml
-          build/compile_commands.json
-
-  deploy:
-    needs: [build-linux, build-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      
-    - name: Create release packages
-      run: |
-        # Create ZIP files for each platform
-        cd TicTacToe-Linux && zip -r ../TicTacToe-Linux.zip . && cd ..
-        cd TicTacToe-Windows && zip -r ../TicTacToe-Windows.zip . && cd ..
-        cd TicTacToe-macOS && zip -r ../TicTacToe-macOS.zip . && cd ..
-        
-    - name: Upload release assets
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          TicTacToe-Linux.zip
-          TicTacToe-Windows.zip
-          TicTacToe-macOS.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify:
-    needs: [build-linux, build-windows, build-macos, code-quality]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Notify build status
-      run: |
-        if [ "${{ needs.build-linux.result }}" == "success" ] && 
-           [ "${{ needs.build-windows.result }}" == "success" ] && 
-           [ "${{ needs.build-macos.result }}" == "success" ]; then
-          echo "✅ All builds successful!"
-        else
-          echo " Some builds failed"
-          exit 1
-        fi
+        path: Patience.exe
