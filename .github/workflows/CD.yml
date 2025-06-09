@@ -1,4 +1,4 @@
-name: TicTacToe-CI-CD
+name: TicTacToe-CI
 
 on:
   push:
@@ -27,9 +27,3 @@ jobs:
     - name: Run simple test
       run: |
         ./tictactoe || true
-
-    - name: Upload built binary as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: tictactoe
-        path: tictactoe
