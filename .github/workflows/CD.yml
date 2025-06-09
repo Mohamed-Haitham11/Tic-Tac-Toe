@@ -1,5 +1,4 @@
 name: TicTacToe-CI-CD
-
 on:
   push:
     branches:
@@ -7,27 +6,30 @@ on:
   pull_request:
     branches:
       - main
-
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    - name: Install build dependencies
-      run: sudo apt-get install -y build-essential
-
-    - name: Build all C++ files
+      
+    - name: Update package lists
+      run: sudo apt-get update
+      
+    - name: Install Qt and build dependencies
       run: |
-        g++ *.cpp -o tictactoe
-
+        sudo apt-get install -y build-essential qt6-base-dev qt6-base-dev-tools cmake
+        
+    - name: Build Qt application
+      run: |
+        qmake6 -project
+        qmake6
+        make
+        
     - name: Run simple test
       run: |
         ./tictactoe || true
-
+        
     - name: Upload built binary as artifact
       uses: actions/upload-artifact@v4
       with:
