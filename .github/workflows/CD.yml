@@ -10,49 +10,43 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest] 
-        # Uncomment if you want to build for Windows as well:
-        # os: [ubuntu-latest, windows-latest] 
+    runs-on: ubuntu-latest # Sticking to ubuntu-latest for simplicity and apt-get
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Qt # Installs the specified Qt version and modules
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: 5.15.2 # Ensure this matches your local Qt 5 version.
-        # CORRECTED: Specifying core modules explicitly.
-        # 'Core' (for QtCore), 'Gui' (for QtGui), 'Widgets' (for QtWidgets),
-        # and 'Sql' (for QtSql) are commonly needed.
-        modules: 'Core Gui Widgets Sql' # Use these specific module names
-        # You might need to add more modules if your project uses them (e.g., Network, PrintSupport, Quick).
+    - name: Install Qt dependencies via apt-get # Reverting to apt-get for stability
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential qtbase5-dev libqt5sql5-sqlite
 
     - name: Generate Makefile using qmake
+      # qmake reads your project file (.pro) and generates a Makefile
+      # Ensure 'Final.pro' is in the root of your repository, or adjust the path.
       run: qmake Final.pro
 
     - name: Build project
+      # make compiles the source files, links libraries, and creates the executable.
       run: make -j$(nproc)
 
     - name: Run simple test (optional)
+      # Assumes your executable name is 'tictactoe' based on the TARGET in your .pro file.
       run: ./tictactoe || true
 
     - name: Upload built binary as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-build-${{ matrix.os }}
-        path: tictactoe 
+        name: tictactoe-qt-build-ubuntu-latest
+        path: tictactoe # Ensure this matches your actual executable name
 
   release:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     permissions:
-      contents: write 
+      contents: write # This permission is required to create a GitHub Release
 
     steps:
     - name: Checkout repository
