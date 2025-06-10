@@ -15,6 +15,7 @@
 #include <QSqlError>
 #include <QDebug>
 #include <QObject> 
+#include <QOverload>
 TicTacToe::TicTacToe(QWidget *parent) : QMainWindow(parent) {
     setupUI();
     connectToDatabase();
