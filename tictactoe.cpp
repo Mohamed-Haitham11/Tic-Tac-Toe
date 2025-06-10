@@ -454,7 +454,7 @@ void TicTacToe::handleLogin() {
         usernameEdit->clear(); 
         passwordEdit->clear();
     } else {
-        QMessageBox::warning(this, "Login Failed", "Invalid username or password!");
+        QMessageBox::warning(this, "Login Failed","Invalid username or password!");
     }
 }
 
