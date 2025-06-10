@@ -481,7 +481,7 @@ void TicTacToe::setPlayerVsPlayer() {
 
 void TicTacToe::setPlayerVsAI() {
     mode = 2;
-    stackedWidget->setCurrentIndex(3); n
+   stackedWidget->setCurrentIndex(3);
 }
 
 void TicTacToe::setDifficultyEasy() {
