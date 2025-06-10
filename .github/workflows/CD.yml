@@ -13,11 +13,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # We start with ubuntu-latest as that's where your current error occurs.
-        # Uncomment 'windows-latest' if you want to also build for Windows.
-        # If adding Windows/macOS, remember to adjust asset paths and consider deployment tools.
         os: [ubuntu-latest] 
-        # os: [ubuntu-latest, windows-latest] # Example for multi-OS build
+        # Uncomment if you want to build for Windows as well:
+        # os: [ubuntu-latest, windows-latest] 
 
     steps:
     - name: Checkout repository
@@ -26,54 +24,35 @@ jobs:
     - name: Set up Qt # Installs the specified Qt version and modules
       uses: jurplel/install-qt-action@v3
       with:
-        # IMPORTANT: Qt 5.15.2 is explicitly chosen as it supports QOverload.
-        # If your local environment uses a different 5.x version (e.g., 5.9, 5.12),
-        # or Qt 6, update this version accordingly.
-        version: 5.15.2 
-        # List all Qt modules your project explicitly uses.
-        # 'qtbase' is fundamental, and 'qtsql' is needed for your database code.
-        # Add others if your project depends on them (e.g., qtcharts, qtwidgets, qtnetwork).
-        modules: 'qtbase qtsql' 
-        # For Linux (ubuntu-latest), the default target is usually fine.
-        # For Windows/macOS, you might need to specify the architecture, e.g.:
-        # arch: 'win64_msvc2019_64' (for MSVC) or 'win64_mingw' (for MinGW) on Windows
-        # arch: 'macos_64' on macOS
+        version: 5.15.2 # Ensure this matches your local Qt 5 version.
+        # CORRECTED: Specifying core modules explicitly.
+        # 'Core' (for QtCore), 'Gui' (for QtGui), 'Widgets' (for QtWidgets),
+        # and 'Sql' (for QtSql) are commonly needed.
+        modules: 'Core Gui Widgets Sql' # Use these specific module names
+        # You might need to add more modules if your project uses them (e.g., Network, PrintSupport, Quick).
 
     - name: Generate Makefile using qmake
-      # qmake reads your project file (Final.pro) and generates a Makefile.
-      # Ensure 'Final.pro' is in the root of your repository.
       run: qmake Final.pro
 
     - name: Build project
-      # Compiles your application using 'make'.
-      # The '-j$(nproc)' uses all available CPU cores for faster compilation on Linux.
-      # For Windows (if added), you'd use 'make -j%NUMBER_OF_PROCESSORS%' or 'cmake --build . --config Release --parallel'.
       run: make -j$(nproc)
 
     - name: Run simple test (optional)
-      # This step simply attempts to execute the built binary.
-      # It confirms the application can launch but doesn't perform deep functional testing.
-      # '|| true' prevents the workflow from failing if the GUI application doesn't exit cleanly.
-      # On Linux, the executable name is likely 'tictactoe' (from TARGET in .pro file).
-      # On Windows, it would be 'tictactoe.exe'.
       run: ./tictactoe || true
 
     - name: Upload built binary as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-build-${{ matrix.os }} # Artifact name includes OS for clarity
-        path: tictactoe # Ensure this matches your actual executable name
+        name: tictactoe-qt-build-${{ matrix.os }}
+        path: tictactoe 
 
   release:
-    # This job runs only after the 'build' job (or all builds in the matrix) completes successfully.
     needs: build
-    # This ensures the release job only runs on pushes to the 'main' branch, not on pull requests,
-    # and only if the preceding build job was successful.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
-    runs-on: ubuntu-latest # You can choose a single OS for the release process
+    runs-on: ubuntu-latest 
 
     permissions:
-      contents: write # This permission is necessary for creating a GitHub Release
+      contents: write 
 
     steps:
     - name: Checkout repository
@@ -82,8 +61,8 @@ jobs:
     - name: Download built binary artifact (Ubuntu)
       uses: actions/download-artifact@v4
       with:
-        name: tictactoe-qt-build-ubuntu-latest # Must match the artifact name from the build job
-        path: . # Downloads the artifact to the current working directory
+        name: tictactoe-qt-build-ubuntu-latest
+        path: .
 
     - name: Get current date for release tag
       id: date
@@ -93,7 +72,6 @@ jobs:
       id: create_release
       uses: softprops/action-gh-release@v1
       with:
-        # Generates a unique tag name using the current date and commit SHA.
         tag_name: v${{ steps.date.outputs.RELEASE_DATE }}-${{ github.sha }}
         name: Release ${{ steps.date.outputs.RELEASE_DATE }} (Ubuntu)
         body: |
@@ -106,10 +84,10 @@ jobs:
           need to bundle it with the necessary Qt shared libraries. On Linux, tools like
           `linuxdeployqt` can help with this. For Windows, `windeployqt.exe` is used.
           This workflow currently only uploads the executable itself.
-        draft: false # Set to 'true' if you want to manually publish the release later
-        prerelease: false # Set to 'true' for pre-release versions
+        draft: false
+        prerelease: false
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is automatically provided by GitHub Actions
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload Release Asset (Ubuntu)
       uses: actions/upload-release-asset@v1
@@ -117,7 +95,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./tictactoe # Path to the executable downloaded earlier
-        asset_name: tictactoe-ubuntu-latest # Name of the asset in the release
-        asset_content_type: application/octet-stream # Standard content type for executables
-
+        asset_path: ./tictactoe
+        asset_name: tictactoe-ubuntu-latest
+        asset_content_type: application/octet-stream
