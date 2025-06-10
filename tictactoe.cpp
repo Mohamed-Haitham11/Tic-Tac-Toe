@@ -453,7 +453,8 @@ void TicTacToe::applyStyleSheet() {
     if (logo) {
         QString themeKey = selectedTheme.toLower().replace(" ", "_").replace(".", "");
         QString logoPath = QString(":/logos/%1.png").arg(themeKey);
-        QPixmap pixmap(logoPath).scaled(logo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+       QPixmap pixmap(logoPath); // Create the QPixmap object
+        pixmap = pixmap.scaled(logo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation); // Scale and reassign
         logo->setPixmap(pixmap);
     }
 }
