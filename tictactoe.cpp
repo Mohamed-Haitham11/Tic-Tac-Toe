@@ -12,7 +12,6 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QDateTime>
-#include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
 #include <QObject> // Added for QOverload
@@ -1001,6 +1000,14 @@ void TicTacToe::handleSurrender() {
     QMessageBox::information(this, "Surrender", QString("🏳️ %1 wins by surrender!").arg(winner));
     backToModeSelection();
 }
+
+// ==================== Theme Toggle ====================
+void TicTacToe::toggleNightMode() {
+    // Implement night mode toggle logic here if needed
+    // For now, an empty function satisfies the linker
+    qDebug() << "Toggle Night Mode called.";
+}
+
 /*
 REAL full function bodies will be attached part-by-part.
 This is the final full layout for perfect building.
