@@ -26,6 +26,9 @@ QString currentUsername ;
 void TicTacToe::setupUI() {
     stackedWidget = new QStackedWidget(this);
 
+    // Declare the member function pointer for QPushButton::clicked() once
+    void (QPushButton::*clickedSignal)() = &QPushButton::clicked;
+
     // === Login Screen (Index 0) ===
     QWidget *loginWidget = new QWidget();
     QVBoxLayout *loginLayout = new QVBoxLayout(loginWidget);
@@ -53,15 +56,15 @@ void TicTacToe::setupUI() {
 
     QPushButton *loginButton = new QPushButton("Login", this);
     loginButton->setMinimumHeight(50);
-    connect(loginButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::handleLogin);
+    connect(loginButton, clickedSignal, this, &TicTacToe::handleLogin);
 
     QPushButton *registerButton = new QPushButton("Register", this);
     registerButton->setMinimumHeight(40);
-    connect(registerButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::registerAccount);
+    connect(registerButton, clickedSignal, this, &TicTacToe::registerAccount);
 
     QPushButton *guestButton = new QPushButton("Play as Guest", this);
     guestButton->setMinimumHeight(40);
-    connect(guestButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::guestLogin);
+    connect(guestButton, clickedSignal, this, &TicTacToe::guestLogin);
 
     themeSelector = new QComboBox(this);
     themeSelector->addItems({"Light", "Dark", "Blue", "Plywood", "S.P.Q.R", "Carthago", "Frosted Glass", "Ancient Egypt", "Seljuk Empire","8-Bit","Cyber Enhanced"});
@@ -99,17 +102,17 @@ void TicTacToe::setupUI() {
     pvpButton->setStyleSheet(bigButtonStyle);
     pveButton->setStyleSheet(bigButtonStyle);
 
-    connect(pvpButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::setPlayerVsPlayer);
-    connect(pveButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::setPlayerVsAI);
+    connect(pvpButton, clickedSignal, this, &TicTacToe::setPlayerVsPlayer);
+    connect(pveButton, clickedSignal, this, &TicTacToe::setPlayerVsAI);
     QPushButton *historyButton = new QPushButton("View Match History", this);
     historyButton->setMinimumHeight(40);
-    connect(historyButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::loadMatchHistory);
+    connect(historyButton, clickedSignal, this, &TicTacToe::loadMatchHistory);
     QPushButton *logoutButtonMode = new QPushButton("Logout", this);
     logoutButtonMode->setMaximumWidth(100);
-    connect(logoutButtonMode, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::logout);
+    connect(logoutButtonMode, clickedSignal, this, &TicTacToe::logout);
     QPushButton *backToLoginButton = new QPushButton("Back", this);
     backToLoginButton->setMaximumWidth(100);
-    connect(backToLoginButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, [this]() {
+    connect(backToLoginButton, clickedSignal, this, [this]() {
         stackedWidget->setCurrentIndex(0); // Go back to login screen
     });
 
@@ -136,15 +139,15 @@ void TicTacToe::setupUI() {
     QHBoxLayout *headerLayout = new QHBoxLayout();
     QPushButton *backButton = new QPushButton("Back", this);
     backButton->setMaximumWidth(100);
-    connect(backButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::backToModeSelection);
+    connect(backButton, clickedSignal, this, &TicTacToe::backToModeSelection);
 
     scoreboardToggleButton = new QPushButton("Show Scoreboard", this);
     scoreboardToggleButton->setMaximumWidth(150);
-    connect(scoreboardToggleButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::toggleScoreboard);
+    connect(scoreboardToggleButton, clickedSignal, this, &TicTacToe::toggleScoreboard);
 
     QPushButton *logoutButton = new QPushButton("Logout", this);
     logoutButton->setMaximumWidth(100);
-    connect(logoutButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::logout);
+    connect(logoutButton, clickedSignal, this, &TicTacToe::logout);
 
     /*nightModeButton = new QPushButton("Night Mode", this);
     nightModeButton->setMaximumWidth(100);
@@ -205,12 +208,12 @@ void TicTacToe::setupUI() {
     hardButton->setStyleSheet(bigButtonStyle);
     QPushButton *backToModeButton = new QPushButton("Back", this);
     backToModeButton->setMaximumWidth(100);
-    connect(backToModeButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, [this]() {
+    connect(backToModeButton, clickedSignal, this, [this]() {
         stackedWidget->setCurrentIndex(1); // Back to mode selection
     });
-    connect(easyButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::setDifficultyEasy);
-    connect(mediumButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::setDifficultyMedium);
-    connect(hardButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::setDifficultyHard);
+    connect(easyButton, clickedSignal, this, &TicTacToe::setDifficultyEasy);
+    connect(mediumButton, clickedSignal, this, &TicTacToe::setDifficultyMedium);
+    connect(hardButton, clickedSignal, this, &TicTacToe::setDifficultyHard);
 
     difficultyLayout->addWidget(difficultyTitle);
     difficultyLayout->addSpacing(30);
@@ -239,7 +242,7 @@ void TicTacToe::setupUI() {
 
     QPushButton *startGameButton = new QPushButton("Start Game", this);
     startGameButton->setMinimumHeight(50);
-    connect(startGameButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::startPvPWithNames);
+    connect(startGameButton, clickedSignal, this, &TicTacToe::startPvPWithNames);
 
     nameInputLayout->addWidget(nameInputTitle);
     nameInputLayout->addSpacing(30);
@@ -247,7 +250,7 @@ void TicTacToe::setupUI() {
     nameInputLayout->addWidget(startGameButton);
     QPushButton *backToSettingsButton = new QPushButton("Back", this);
     backToSettingsButton->setMaximumWidth(100);
-    connect(backToSettingsButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, [this]() {
+    connect(backToSettingsButton, clickedSignal, this, [this]() {
         stackedWidget->setCurrentIndex(5); // Go back to settings screen
     });
     nameInputLayout->addWidget(backToSettingsButton);
@@ -278,7 +281,7 @@ void TicTacToe::setupUI() {
 
     QPushButton *applySettingsButton = new QPushButton("Apply Settings", this);
     applySettingsButton->setMinimumHeight(50);
-    connect(applySettingsButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, &TicTacToe::applyGameSettings);
+    connect(applySettingsButton, clickedSignal, this, &TicTacToe::applyGameSettings);
 
     settingsLayout->addWidget(settingsTitle);
     settingsLayout->addSpacing(20);
@@ -287,7 +290,7 @@ void TicTacToe::setupUI() {
     settingsLayout->addWidget(applySettingsButton);
     QPushButton *backToModeButton2 = new QPushButton("Back", this);
     backToModeButton2->setMaximumWidth(100);
-    connect(backToModeButton2, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, [this]() {
+    connect(backToModeButton2, clickedSignal, this, [this]() {
         stackedWidget->setCurrentIndex(1); // Back to mode selection
     });
     settingsLayout->addWidget(backToModeButton2);
@@ -305,7 +308,7 @@ void TicTacToe::setupUI() {
     matchHistoryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     matchHistoryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    connect(backButton, static_cast<void (QPushButton::*)()>(&QPushButton::clicked), this, [this]() {
+    connect(backButton, clickedSignal, this, [this]() {
         stackedWidget->setCurrentIndex(1); // Return to mode selection
     });
 
@@ -450,8 +453,8 @@ void TicTacToe::applyStyleSheet() {
     if (logo) {
         QString themeKey = selectedTheme.toLower().replace(" ", "_").replace(".", "");
         QString logoPath = QString(":/logos/%1.png").arg(themeKey);
-        QPixmap pixmap(logoPath);
-        logo->setPixmap(pixmap.scaled(logo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        QPixmap pixmap(logoPath).scaled(logo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        logo->setPixmap(pixmap);
     }
 }
 
