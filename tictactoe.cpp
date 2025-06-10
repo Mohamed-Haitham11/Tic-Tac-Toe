@@ -14,8 +14,9 @@
 #include <QDateTime>
 #include <QSqlError>
 #include <QDebug>
-#include <QObject> 
+#include <QObject> // Added for QOverload
 #include <QOverload>
+// ==================== Constructor ====================
 TicTacToe::TicTacToe(QWidget *parent) : QMainWindow(parent) {
     setupUI();
     connectToDatabase();
@@ -25,9 +26,11 @@ TicTacToe::TicTacToe(QWidget *parent) : QMainWindow(parent) {
 }
 QString currentUsername ;
 
-
+// ==================== UI Setup ====================
+// (setupUI() - Full UI Setup for Login, Mode selection, Difficulty selection, Player 2 name, Settings, Game Board)
 void TicTacToe::setupUI() {
     stackedWidget = new QStackedWidget(this);
+    // === Login Screen (Index 0) ===
     QWidget *loginWidget = new QWidget();
     QVBoxLayout *loginLayout = new QVBoxLayout(loginWidget);
     QHBoxLayout *logoRowLayout = new QHBoxLayout();
@@ -40,6 +43,7 @@ void TicTacToe::setupUI() {
     QLabel *loginTitle = new QLabel("Tic Tac Toe Login", this);
     loginTitle->setAlignment(Qt::AlignCenter);
     loginTitle->setFont(QFont("Arial", 18, QFont::Bold));
+
     usernameEdit = new QLineEdit(this);
     usernameEdit->setPlaceholderText("Username");
     usernameEdit->setMinimumHeight(40);
@@ -47,15 +51,18 @@ void TicTacToe::setupUI() {
     passwordEdit->setPlaceholderText("Password");
     passwordEdit->setEchoMode(QLineEdit::Password);
     passwordEdit->setMinimumHeight(40);
+
     QPushButton *loginButton = new QPushButton("Login", this);
     loginButton->setMinimumHeight(50);
     connect(loginButton, &QPushButton::clicked, this, &TicTacToe::handleLogin);
     QPushButton *registerButton = new QPushButton("Register", this);
     registerButton->setMinimumHeight(40);
     connect(registerButton, &QPushButton::clicked, this, &TicTacToe::registerAccount);
+
     QPushButton *guestButton = new QPushButton("Play as Guest", this);
     guestButton->setMinimumHeight(40);
     connect(guestButton, &QPushButton::clicked, this, &TicTacToe::guestLogin);
+
     themeSelector = new QComboBox(this);
     themeSelector->addItems({"Light", "Dark", "Blue", "Plywood", "S.P.Q.R", "Carthago", "Frosted Glass", "Ancient Egypt", "Seljuk Empire","8-Bit","Cyber Enhanced"});
     themeSelector->setCurrentText("Light");
@@ -76,6 +83,7 @@ void TicTacToe::setupUI() {
     loginLayout->addWidget(themeSelector);
     loginLayout->addStretch();
     stackedWidget->addWidget(loginWidget);
+    // === Mode Selection Screen (Index 1) ===
     QWidget *modeSelectionWidget = new QWidget();
     QVBoxLayout *modeSelectionLayout = new QVBoxLayout(modeSelectionWidget);
 
@@ -101,6 +109,10 @@ void TicTacToe::setupUI() {
     connect(backToLoginButton, &QPushButton::clicked, this, [this]() {
         stackedWidget->setCurrentIndex(0); // Go back to login screen
     });
+    /*QPushButton *modeNightModeButton = new QPushButton("Night Mode", this);
+    modeNightModeButton->setMaximumWidth(100);
+    connect(modeNightModeButton, &QPushButton::clicked, this, &TicTacToe::toggleNightMode);*/
+
     modeSelectionLayout->addWidget(modeSelectionTitle);
     modeSelectionLayout->addSpacing(30);
     modeSelectionLayout->addWidget(pvpButton);
@@ -110,10 +122,13 @@ void TicTacToe::setupUI() {
     modeSelectionLayout->addStretch();
     QHBoxLayout *modeBtnsLayout = new QHBoxLayout();
     modeBtnsLayout->addWidget(logoutButtonMode);
+    //modeBtnsLayout->addWidget(modeNightModeButton);
     modeSelectionLayout->addLayout(modeBtnsLayout);
     modeBtnsLayout->addWidget(backToLoginButton);
+    // === Game Screen (Index 2) ===
     QWidget *gameWidget = new QWidget();
     QVBoxLayout *mainLayout = new QVBoxLayout(gameWidget);
+    // Header Row
     QHBoxLayout *headerLayout = new QHBoxLayout();
 
     QPushButton *backButton = new QPushButton("Back", this);
@@ -130,18 +145,22 @@ void TicTacToe::setupUI() {
     QPushButton *logoutButton = new QPushButton("Logout", this);
     logoutButton->setMaximumWidth(100);
     connect(logoutButton, &QPushButton::clicked, this, &TicTacToe::logout);
+
+    // Arrange header layout
     headerLayout->addWidget(backButton);
     headerLayout->addWidget(scoreboardToggleButton);
     headerLayout->addStretch();
     headerLayout->addWidget(surrenderButton);
     headerLayout->addWidget(logoutButton);
     mainLayout->addLayout(headerLayout);
+    // Scoreboard
     scoreLabel = new QLabel(this);
     scoreLabel->setAlignment(Qt::AlignCenter);
     scoreLabel->setFont(QFont("Arial", 14, QFont::Bold));
     scoreLabel->setStyleSheet("QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 10px; }");
     scoreLabel->setVisible(scoreboardVisible);
     mainLayout->addWidget(scoreLabel);
+    // Game Grid
     QGridLayout *gridLayout = new QGridLayout();
     buttonGroup = new QButtonGroup(this);
     for (int i = 0; i < 9; i++) {
@@ -154,7 +173,7 @@ void TicTacToe::setupUI() {
         buttonGroup->addButton(button, i);
     }
 
-
+    // FIX: Use QOverload to specify which buttonClicked signal to connect to
     connect(buttonGroup, &QButtonGroup::buttonClicked,
             this, [this](QAbstractButton* button) {
                 int id = buttonGroup->id(button);
@@ -162,10 +181,12 @@ void TicTacToe::setupUI() {
             });
     mainLayout->addLayout(gridLayout);
 
+    // Game Status Label
     statusLabel = new QLabel("Player O's turn", this);
     statusLabel->setAlignment(Qt::AlignCenter);
     statusLabel->setFont(QFont("Arial", 16));
     mainLayout->addWidget(statusLabel);
+    // === Difficulty Selection (Index 3) ===
     QWidget *difficultyWidget = new QWidget();
     QVBoxLayout *difficultyLayout = new QVBoxLayout(difficultyWidget);
     QLabel *difficultyTitle = new QLabel("Select AI Difficulty", this);
@@ -195,7 +216,12 @@ void TicTacToe::setupUI() {
     difficultyLayout->addWidget(hardButton);
     difficultyLayout->addSpacing(20);
     difficultyLayout->addWidget(backToModeButton);
-  
+    /*QPushButton *diffNightModeButton = new QPushButton("Night Mode", this);
+    diffNightModeButton->setMaximumWidth(100);
+    connect(diffNightModeButton, &QPushButton::clicked, this, &TicTacToe::toggleNightMode);
+    difficultyLayout->addWidget(diffNightModeButton);*/
+
+    // === Player 2 Name Input (Index 4) ===
     QWidget *nameInputWidget = new QWidget();
     QVBoxLayout *nameInputLayout = new QVBoxLayout(nameInputWidget);
 
@@ -219,6 +245,8 @@ void TicTacToe::setupUI() {
         stackedWidget->setCurrentIndex(5); // Go back to settings screen
     });
     nameInputLayout->addWidget(backToSettingsButton);
+
+    // === Settings Screen (Index 5) ===
     QWidget *settingsWidget = new QWidget();
     QVBoxLayout *settingsLayout = new QVBoxLayout(settingsWidget);
 
@@ -253,9 +281,10 @@ void TicTacToe::setupUI() {
     QPushButton *backToModeButton2 = new QPushButton("Back", this);
     backToModeButton2->setMaximumWidth(100);
     connect(backToModeButton2, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(1); 
+        stackedWidget->setCurrentIndex(1); // Back to mode selection
     });
     settingsLayout->addWidget(backToModeButton2);
+    // === Match History Screen (Index 6) ===
     QWidget *historyWidget = new QWidget();
     QVBoxLayout *historyLayout = new QVBoxLayout(historyWidget);
 
@@ -275,6 +304,7 @@ void TicTacToe::setupUI() {
     historyLayout->addWidget(matchHistoryTable);
     historyLayout->addWidget(backButton);
 
+    // === Add Widgets to Stacked Widget ===
     stackedWidget->addWidget(loginWidget); // 0
     stackedWidget->addWidget(modeSelectionWidget);  // 1
     stackedWidget->addWidget(gameWidget);           // 2
@@ -289,7 +319,8 @@ void TicTacToe::setupUI() {
 }
 
 
-
+// ==================== Theme Application ====================
+// (applyStyleSheet())
 void TicTacToe::applyStyleSheet() {
     QString style;
     if (selectedTheme == "Dark") {
@@ -386,7 +417,7 @@ void TicTacToe::applyStyleSheet() {
     }
 
     else {
-        
+        // Light theme (default)
         style = "QWidget { background-color: #F5F5F5; color: #333333; }"
                 "QLabel { color: #333333; }"
                 "QLineEdit { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC; border-radius: 4px; padding: 5px; }"
@@ -413,7 +444,8 @@ void TicTacToe::applyStyleSheet() {
     }
 }
 
-
+// ==================== Scoreboard ====================
+// (updateScoreboard())
 void TicTacToe::updateScoreboard() {
     QString scoreText = QString("<table width='100%'>"
                                 "<tr><th align='left'>%1 (X)</th><th align='center'>Ties</th><th align='right'>%2 (O)</th></tr>"
@@ -430,7 +462,8 @@ void TicTacToe::updateScoreboard() {
     scoreLabel->setText(scoreText);
 }
 
-
+// ==================== Login / Logout ====================
+// (handleLogin(), logout(), backToModeSelection())
 void TicTacToe::handleLogin() {
     QString username = usernameEdit->text();
     QString password = passwordEdit->text();
@@ -447,14 +480,16 @@ void TicTacToe::handleLogin() {
     if (query.exec() && query.next()) {
         loggedInUser = username;
         guestMode = false;
-        stackedWidget->setCurrentIndex(1); 
+        stackedWidget->setCurrentIndex(1); // Go to mode selection
+
+        // MODIFIED: Show history button for logged-in users
         QPushButton *historyButton = findChild<QPushButton *>("View Match History");
         if (historyButton) historyButton->show();
 
-        usernameEdit->clear(); 
+        usernameEdit->clear(); // MODIFIED: Clear after use
         passwordEdit->clear();
     } else {
-        QMessageBox::warning(this, "Login Failed","Invalid username or password!");
+        QMessageBox::warning(this, "Login Failed", "Invalid username or password!");
     }
 }
 
@@ -463,7 +498,7 @@ void TicTacToe::logout() {
     guestMode = false;
     usernameEdit->clear();
     passwordEdit->clear();
-    stackedWidget->setCurrentIndex(0); 
+    stackedWidget->setCurrentIndex(0); // Back to login screen
 }
 
 
@@ -474,31 +509,34 @@ void TicTacToe::backToModeSelection() {
     updateScoreboard();
     stackedWidget->setCurrentIndex(1); // Go back to mode selection screen
 }
+// ==================== Mode Selection ====================
+// (setPlayerVsPlayer(), setPlayerVsAI(), setDifficultyEasy(), setDifficultyMedium(), setDifficultyHard())
 void TicTacToe::setPlayerVsPlayer() {
     mode = 1;
-    stackedWidget->setCurrentIndex(5); 
+    stackedWidget->setCurrentIndex(5); // Go to game settings screen
 }
 
 void TicTacToe::setPlayerVsAI() {
     mode = 2;
-   stackedWidget->setCurrentIndex(3);
+    stackedWidget->setCurrentIndex(3); // Go to game settings screen
 }
 
 void TicTacToe::setDifficultyEasy() {
     difficulty = 1;
-    stackedWidget->setCurrentIndex(5); 
+    stackedWidget->setCurrentIndex(5); // Go to game settings screen
 }
 
 void TicTacToe::setDifficultyMedium() {
     difficulty = 2;
-    stackedWidget->setCurrentIndex(5); 
+    stackedWidget->setCurrentIndex(5); // Go to game settings screen
 }
 
 void TicTacToe::setDifficultyHard() {
     difficulty = 3;
-    stackedWidget->setCurrentIndex(5); 
+    stackedWidget->setCurrentIndex(5); // Go to game settings screen
 }
-
+// ==================== Game Settings and Start ====================
+// (applyGameSettings(), startPvPWithNames())
 
 void TicTacToe::applyGameSettings() {
     totalGames = totalGamesSpinBox->value();
@@ -510,17 +548,17 @@ void TicTacToe::applyGameSettings() {
     }
 
     if (mode == 1) {
-        
+        // MODIFIED: Guest mode skips name entry and uses default names
         if (guestMode) {
             player1Name = "Player 1";
             player2Name = "Player 2";
-            stackedWidget->setCurrentIndex(2); 
+            stackedWidget->setCurrentIndex(2); // Go directly to game screen
             resetGame();
         } else {
-            stackedWidget->setCurrentIndex(4);
+            stackedWidget->setCurrentIndex(4); // Go to player name input screen
         }
     } else {
-        stackedWidget->setCurrentIndex(2); 
+        stackedWidget->setCurrentIndex(2); // Go to game screen
         player1Name = "AI";
         player2Name = loggedInUser.isEmpty() ? "Player" : loggedInUser;
         resetGame();
@@ -538,9 +576,10 @@ void TicTacToe::startPvPWithNames() {
     stackedWidget->setCurrentIndex(2); // Go to game screen
     resetGame();
 }
-
+// ==================== Core Game Logic ====================
+// (resetGame(), makeMove(), makeAIMove(), easyMove(), mediumMove(), hardMove(), minimax())
 void TicTacToe::resetGame() {
-  
+    // Check if the series is already over
     if (player1Wins >= gamesToWin || player2Wins >= gamesToWin ||
         (player1Wins + player2Wins + ties) >= totalGames) {
         backToModeSelection();
@@ -594,7 +633,7 @@ void TicTacToe::makeMove(int index) {
         else player2Wins++;
         updateScoreboard();
 
-     
+        // Check if either player has won the series
         if (player1Wins >= gamesToWin || player2Wins >= gamesToWin) {
             QString winner = player1Wins >= gamesToWin ? player1Name : player2Name;
             gameOver(QString("%1 wins the series %2-%3!")
@@ -604,7 +643,7 @@ void TicTacToe::makeMove(int index) {
             return;
         }
 
-       
+        // Check if maximum games reached
         if ((player1Wins + player2Wins + ties) >= totalGames) {
             if (player1Wins > player2Wins) {
                 gameOver(QString("%1 wins the series %2-%3!")
@@ -629,7 +668,7 @@ void TicTacToe::makeMove(int index) {
     if (checkTie()) {
         ties++;
         updateScoreboard();
-       
+        // Check if maximum games reached
         if ((player1Wins + player2Wins + ties) >= totalGames) {
             if (player1Wins > player2Wins) {
                 gameOver(QString("%1 wins the series %2-%3!")
@@ -747,7 +786,8 @@ int TicTacToe::minimax(int depth, bool isMaximizing) {
 }
 
 
-
+// ==================== Win / Tie Check ====================
+// (checkWin(), checkTie(), gameOver())
 void TicTacToe::gameOver(const QString &message, bool seriesOver) {
     statusLabel->setText(message);
     if (!scoreboardVisible)
@@ -811,7 +851,8 @@ bool TicTacToe::checkTie() {
     }
     return true;
 }
-
+// ==================== Board / UI Updates ====================
+// (updateBoard(), updateStatus(), toggleNightMode(), toggleScoreboard())
 void TicTacToe::updateBoard() {
     for (int i = 0; i < 9; i++) {
         QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
@@ -837,7 +878,8 @@ void TicTacToe::toggleScoreboard() {
     }
 }
 
-
+// ==================== Button Handler ====================
+// (handleButtonClick())
 void TicTacToe::handleButtonClick(int index) {
     if (board[index] != EMPTY || (mode == 2 && currentPlayer == PLAYER1)) return;
     makeMove(index);
@@ -870,13 +912,13 @@ void TicTacToe::saveMatchResult(const QString &winner, const QString &resultText
     if (!db.isOpen()) return;
     QString emojiResult;
     if (resultText == "Win") {
-        emojiResult = "🏆"; 
+        emojiResult = "🏆"; // Trophy
     } else if (resultText == "Defeat") {
-        emojiResult = "💀"; 
+        emojiResult = "💀"; // Skull
     } else if (resultText == "Tie") {
-        emojiResult = "🤝"; 
+        emojiResult = "🤝"; // Handshake
     } else if (resultText == "Surrender") {
-        emojiResult = "🏳️";
+        emojiResult = "🏳️"; // White flag
     } else {
         emojiResult = resultText;
     }
@@ -913,7 +955,7 @@ void TicTacToe::loadMatchHistory() {
         ++row;
     }
 
-    stackedWidget->setCurrentIndex(6); 
+    stackedWidget->setCurrentIndex(6); // Switch to match history screen
 }
 void TicTacToe::registerAccount() {
     QString username = usernameEdit->text();
@@ -940,11 +982,11 @@ void TicTacToe::registerAccount() {
 void TicTacToe::guestLogin() {
     loggedInUser = "Player 1";
     guestMode = true;
-    stackedWidget->setCurrentIndex(1); 
-    usernameEdit->clear(); 
+    stackedWidget->setCurrentIndex(1); // Mode selection
+    usernameEdit->clear(); // MODIFIED: Clear after use
     passwordEdit->clear();
 
- 
+    // MODIFIED: Hide history button for guests
 }
 void TicTacToe::handleSurrender() {
     QString winner;
