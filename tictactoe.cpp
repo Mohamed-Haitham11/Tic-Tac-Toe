@@ -999,7 +999,7 @@ void TicTacToe::handleSurrender() {
     }
 
     saveMatchResult(winner, result);
-    QMessageBox::information(this, "Surrender", QString("🏳️ %1 wins by surrender! ").arg(winner));
+    QMessageBox::information(this, "Surrender", QString("🏳️ %1 wins by surrender!").arg(winner));
     backToModeSelection();
 }
 
