@@ -18,6 +18,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
+    - name: List project files
+      run: |
+        echo "Project root contents:"
+        ls -la
+        echo "Looking for .pro files:"
+        find . -name "*.pro" -type f
+      
     - name: Install Qt dependencies
       run: |
         sudo apt-get update
@@ -41,6 +48,7 @@ jobs:
         
     - name: Generate Makefile using qmake
       run: |
+        ls -la *.pro
         qmake TTC_with_vids.pro
         
     - name: Build project
