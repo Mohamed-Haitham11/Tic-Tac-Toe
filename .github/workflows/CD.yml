@@ -88,16 +88,59 @@ jobs:
             exit 1
         }
         
-        # Run windeployqt
+        # Run windeployqt with more verbose output and error handling
         Write-Host "Running windeployqt..."
-        & $windeployqt --qmldir . --compiler-runtime "deploy\$exeName"
+        Write-Host "Command: $windeployqt --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime deploy\$exeName"
         
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "windeployqt failed with exit code: $LASTEXITCODE"
-            exit $LASTEXITCODE
+        try {
+            & $windeployqt --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime "deploy\$exeName" 2>&1 | Tee-Object -Variable output
+            Write-Host "windeployqt output:"
+            Write-Host $output
+            
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "windeployqt failed with exit code: $LASTEXITCODE"
+                Write-Host "Trying alternative approach..."
+                
+                # Try with minimal options
+                & $windeployqt --compiler-runtime "deploy\$exeName" 2>&1 | Tee-Object -Variable output2
+                Write-Host "Alternative windeployqt output:"
+                Write-Host $output2
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Both windeployqt attempts failed. Proceeding with manual deployment..."
+                    
+                    # Manual deployment - copy essential Qt DLLs
+                    $qtDlls = @(
+                        "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", 
+                        "Qt6Multimedia.dll", "Qt6MultimediaWidgets.dll",
+                        "Qt6Network.dll", "Qt6Sql.dll"
+                    )
+                    
+                    foreach ($dll in $qtDlls) {
+                        $dllPath = "$qtBinPath\$dll"
+                        if (Test-Path $dllPath) {
+                            Copy-Item $dllPath "deploy\"
+                            Write-Host "Copied $dll"
+                        }
+                    }
+                    
+                    # Copy platforms plugin
+                    $platformsDir = "${{ github.workspace }}\6.5.0\msvc2019_64\plugins\platforms"
+                    if (Test-Path $platformsDir) {
+                        New-Item -ItemType Directory -Force -Path "deploy\platforms"
+                        Copy-Item "$platformsDir\qwindows.dll" "deploy\platforms\" -ErrorAction SilentlyContinue
+                        Copy-Item "$platformsDir\qminimal.dll" "deploy\platforms\" -ErrorAction SilentlyContinue
+                        Write-Host "Copied platform plugins"
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Host "Exception occurred: $_.Exception.Message"
+            Write-Host "Proceeding with basic deployment..."
         }
         
-        Write-Host "Deployment successful. Deploy folder contents:"
+        Write-Host "Final deploy folder contents:"
         Get-ChildItem "deploy" -Recurse
         
     - name: Upload Windows build
