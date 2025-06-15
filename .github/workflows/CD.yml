@@ -39,7 +39,7 @@ jobs:
     - name: Build with qmake
       run: |
         qmake --version
-        qmake TTC_with_vids.pro
+        qmake The_Lab.pro
         nmake
         
     - name: Upload Windows build
@@ -74,7 +74,7 @@ jobs:
     - name: Build with qmake
       run: |
         qmake --version
-        qmake TTC_with_vids.pro
+        qmake The_Lab.pro
         make -j$(sysctl -n hw.ncpu)
         
     - name: Upload macOS build
@@ -83,12 +83,53 @@ jobs:
         name: tictactoe-macos-${{ github.sha }}
         path: |
           *.app
-          TTC_with_vids
-          TTC*
+          The_Lab
+          The_Lab*
+        if-no-files-found: warn
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install Qt 6 using aqt
+      run: |
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
+        
+    - name: Set Qt environment
+      run: |
+        echo "${{ github.workspace }}/6.5.0/gcc_64/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev \
+          libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+          libasound2-dev libpulse-dev
+        
+    - name: Build with qmake
+      run: |
+        qmake --version
+        qmake The_Lab.pro
+        make -j$(nproc)
+        
+    - name: Upload Linux build
+      uses: actions/upload-artifact@v4
+      with:
+        name: tictactoe-linux-${{ github.sha }}
+        path: |
+          The_Lab
+          The_Lab*
         if-no-files-found: warn
 
   release:
-    needs: [build-windows, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     permissions:
@@ -121,6 +162,13 @@ jobs:
           cd ../..
         fi
         
+        # Linux build
+        if [ -d "artifacts/tictactoe-linux-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-linux-${{ github.sha }}"
+          tar -czf ../../release/tictactoe-linux-x64.tar.gz *
+          cd ../..
+        fi
+        
         ls -la release/
         
     - name: Get version info
@@ -149,6 +197,7 @@ jobs:
           ### Downloads
           - **Windows:** tictactoe-windows-x64.zip  
           - **macOS:** tictactoe-macos-x64.tar.gz
+          - **Linux:** tictactoe-linux-x64.tar.gz
           
           ### Installation
           1. Download the appropriate package for your platform
@@ -157,7 +206,15 @@ jobs:
           
           **Requirements:**
           - Qt 6.5.0 runtime libraries
-          - For video features: system multimedia codecs
+          - For video/audio features: system multimedia codecs
+          
+          ### Project Structure
+          This build includes:
+          - Main application with TicTacToe game logic
+          - Login system functionality
+          - Settings and configuration
+          - Multimedia support
+          - Custom UI themes
           
         files: |
           release/*
