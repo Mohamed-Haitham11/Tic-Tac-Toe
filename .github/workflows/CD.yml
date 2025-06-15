@@ -2,154 +2,228 @@ name: TicTacToe Qt CI/CD
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   pull_request:
-    branches: [main, master]
+    branches:
+      - main
+      - master
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    - name: Install Qt 6 with AQT
+      
+    - name: Install Qt 6 using aqt
       run: |
         python -m pip install --upgrade pip
         pip install aqtinstall
         aqt install-qt windows desktop 6.5.0 win64_msvc2019_64 -m qtmultimedia
-
+        
     - name: Set Qt environment
       run: |
         echo "${{ github.workspace }}\6.5.0\msvc2019_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         echo "QT_ROOT_DIR=${{ github.workspace }}\6.5.0\msvc2019_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "CMAKE_PREFIX_PATH=${{ github.workspace }}\6.5.0\msvc2019_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
+        
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v1.3
-
+      
     - name: Setup MSVC environment
       uses: ilammy/msvc-dev-cmd@v1
-
+      
     - name: Build with qmake
       run: |
-        qmake TTC_with_vids.pro
+        qmake --version
+        qmake The_Lab.pro
         nmake
-        dir
-
-    - name: Deploy with windeployqt
-      run: |
-        if (Test-Path "release\TTC_with_vids.exe") {
-          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" "release\TTC_with_vids.exe"
-        } elseif (Test-Path "debug\TTC_with_vids.exe") {
-          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" "debug\TTC_with_vids.exe"
-        } else {
-          throw "TTC_with_vids.exe not found."
-        }
-
+        
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
         name: tictactoe-windows-${{ github.sha }}
         path: |
-          release/**/*.exe
-          debug/**/*.exe
+          release/*.exe
+          debug/*.exe
+          *.exe
         if-no-files-found: warn
 
   build-macos:
     runs-on: macos-latest
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    - name: Install Qt with aqt
+      
+    - name: Install Qt 6 using aqt
       run: |
-        python3 -m venv venv
-        source venv/bin/activate
+        python -m pip install --upgrade pip
         pip install aqtinstall
-        ./venv/bin/aqt install-qt mac desktop 6.5.0 clang_64 -m qtmultimedia
-
+        aqt install-qt mac desktop 6.5.0 clang_64 -m qtmultimedia
+        
     - name: Set Qt environment
       run: |
-        echo "${{ github.workspace }}/6.5.0/clang_64/bin" >> $GITHUB_PATH
-        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/clang_64" >> $GITHUB_ENV
-        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/clang_64" >> $GITHUB_ENV
-
+        echo "${{ github.workspace }}/6.5.0/macos/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
+        
     - name: Build with qmake
       run: |
-        export PATH="${QT_ROOT_DIR}/bin:$PATH"
-        qmake TTC_with_vids.pro
+        qmake --version
+        qmake The_Lab.pro
         make -j$(sysctl -n hw.ncpu)
-
+        
     - name: Upload macOS build
       uses: actions/upload-artifact@v4
       with:
         name: tictactoe-macos-${{ github.sha }}
         path: |
           *.app
-          TTC_with_vids
+          The_Lab
+          The_Lab*
+        if-no-files-found: warn
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install Qt 6 using aqt
+      run: |
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
+        
+    - name: Set Qt environment
+      run: |
+        echo "${{ github.workspace }}/6.5.0/gcc_64/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev \
+          libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+          libasound2-dev libpulse-dev
+        
+    - name: Build with qmake
+      run: |
+        qmake --version
+        qmake The_Lab.pro
+        make -j$(nproc)
+        
+    - name: Upload Linux build
+      uses: actions/upload-artifact@v4
+      with:
+        name: tictactoe-linux-${{ github.sha }}
+        path: |
+          The_Lab
+          The_Lab*
         if-no-files-found: warn
 
   release:
-    needs: [build-windows, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+      
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      
     - name: Download all build artifacts
       uses: actions/download-artifact@v4
       with:
         path: ./artifacts
-
+        
     - name: Prepare release assets
       run: |
         mkdir -p release
-
+        
+        # Windows build
         if [ -d "artifacts/tictactoe-windows-${{ github.sha }}" ]; then
           cd "artifacts/tictactoe-windows-${{ github.sha }}"
           zip -r ../../release/tictactoe-windows-x64.zip *
           cd ../..
         fi
-
+        
+        # macOS build
         if [ -d "artifacts/tictactoe-macos-${{ github.sha }}" ]; then
           cd "artifacts/tictactoe-macos-${{ github.sha }}"
           tar -czf ../../release/tictactoe-macos-x64.tar.gz *
           cd ../..
         fi
-
+        
+        # Linux build
+        if [ -d "artifacts/tictactoe-linux-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-linux-${{ github.sha }}"
+          tar -czf ../../release/tictactoe-linux-x64.tar.gz *
+          cd ../..
+        fi
+        
+        ls -la release/
+        
     - name: Get version info
       id: version
       run: |
         echo "RELEASE_DATE=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
+        echo "RELEASE_TIME=$(date +'%H%M')" >> "$GITHUB_OUTPUT"
         echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
-
-    - name: Create GitHub Release
+        
+    - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}
         name: TicTacToe Release ${{ steps.version.outputs.RELEASE_DATE }}
         body: |
-          ## Qt TicTacToe Release
-          - Commit: ${{ github.sha }}
-          - Branch: ${{ github.ref_name }}
-
-          ### Downloads:
-          - Windows: tictactoe-windows-x64.zip
-          - macOS: tictactoe-macos-x64.tar.gz
-
-        files: release/*
+          ## TicTacToe Qt 6 Application Release
+          
+          **Build Date:** ${{ steps.version.outputs.RELEASE_DATE }}
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ### Changes
+          ${{ github.event.head_commit.message }}
+          
+          ### Downloads
+          - **Windows:** tictactoe-windows-x64.zip  
+          - **macOS:** tictactoe-macos-x64.tar.gz
+          - **Linux:** tictactoe-linux-x64.tar.gz
+          
+          ### Installation
+          1. Download the appropriate package for your platform
+          2. Extract the archive
+          3. Run the executable
+          
+          **Requirements:**
+          - Qt 6.5.0 runtime libraries
+          - For video/audio features: system multimedia codecs
+          
+          ### Project Structure
+          This build includes:
+          - Main application with TicTacToe game logic
+          - Login system functionality
+          - Settings and configuration
+          - Multimedia support
+          - Custom UI themes
+          
+        files: |
+          release/*
         draft: false
         prerelease: false
         generate_release_notes: true
-
-    - name: Confirm release
+        
+    - name: Update latest release info
       run: |
-        echo "Release created at: ${{ steps.create_release.outputs.html_url }}"
+        echo "Release created successfully!"
+        echo "Tag: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}"
+        echo "Release URL: ${{ steps.create_release.outputs.html_url }}"
