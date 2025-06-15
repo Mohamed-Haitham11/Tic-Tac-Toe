@@ -4,14 +4,14 @@ on:
   push:
     branches:
       - main
-      - master  # Added master branch support
+      - master
   pull_request:
     branches:
       - main
       - master
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,23 +25,34 @@ jobs:
         echo "Looking for .pro files:"
         find . -name "*.pro" -type f
       
-    - name: Install Qt 6 dependencies
+    - name: Install Qt 6 using aqt
+      run: |
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
+        
+    - name: Set Qt environment
+      run: |
+        echo "${{ github.workspace }}/6.5.0/gcc_64/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
+        
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
-          qt6-base-dev \
-          qt6-base-dev-tools \
-          qt6-multimedia-dev \
-          libqt6multimedia6 \
-          libqt6multimediawidgets6 \
-          qt6-tools-dev \
-          qt6-tools-dev-tools \
           libgl1-mesa-dev \
           libglu1-mesa-dev \
-          xvfb \
-          cmake \
-          ninja-build
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-xinerama0 \
+          libxcb-xfixes0 \
+          xvfb
           
     - name: Set up virtual display
       run: |
@@ -49,10 +60,11 @@ jobs:
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         sleep 3
         
-    - name: Generate Makefile using qmake6
+    - name: Generate Makefile using qmake
       run: |
         ls -la *.pro
-        qmake6 TTC_with_vids.pro
+        qmake --version
+        qmake TTC_with_vids.pro
         
     - name: Build project
       run: |
@@ -61,12 +73,11 @@ jobs:
     - name: List build output
       run: |
         ls -la
-        find . -name "*TTC*" -type f -executable
+        find . -name "TTC*" -type f -executable
         
     - name: Test build (basic check)
       run: |
         export DISPLAY=:99
-        # Find the executable name dynamically
         EXECUTABLE=$(find . -name "TTC*" -type f -executable | head -1)
         if [ -n "$EXECUTABLE" ]; then
           echo "Found executable: $EXECUTABLE"
@@ -76,14 +87,13 @@ jobs:
           ls -la
         fi
         
-    - name: Upload built binary as artifact
+    - name: Upload Linux build
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-build-${{ github.sha }}
+        name: tictactoe-linux-${{ github.sha }}
         path: |
           TTC_with_vids
           TTC*
-          *.so*
         if-no-files-found: warn
 
   build-windows:
@@ -93,23 +103,34 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.0'
-        host: 'windows'
-        target: 'desktop'
-        modules: 'qtmultimedia qtmultimediawidgets'
+    - name: Install Qt 6 using aqt
+      run: |
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt windows desktop 6.5.0 win64_msvc2019_64 -m qtmultimedia
         
+    - name: Set Qt environment
+      run: |
+        echo "${{ github.workspace }}\6.5.0\msvc2019_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "QT_ROOT_DIR=${{ github.workspace }}\6.5.0\msvc2019_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}\6.5.0\msvc2019_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+      
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      
     - name: Build with qmake
       run: |
+        qmake --version
         qmake TTC_with_vids.pro
         nmake
         
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-windows-${{ github.sha }}
+        name: tictactoe-windows-${{ github.sha }}
         path: |
           release/*.exe
           debug/*.exe
@@ -123,20 +144,28 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Install Qt 6
+    - name: Install Qt 6 using aqt
       run: |
-        brew install qt@6
-        echo "/usr/local/opt/qt@6/bin" >> $GITHUB_PATH
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt mac desktop 6.5.0 clang_64 -m qtmultimedia
+        
+    - name: Set Qt environment
+      run: |
+        echo "${{ github.workspace }}/6.5.0/macos/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
         
     - name: Build with qmake
       run: |
+        qmake --version
         qmake TTC_with_vids.pro
         make -j$(sysctl -n hw.ncpu)
         
     - name: Upload macOS build
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-macos-${{ github.sha }}
+        name: tictactoe-macos-${{ github.sha }}
         path: |
           *.app
           TTC_with_vids
@@ -144,7 +173,7 @@ jobs:
         if-no-files-found: warn
 
   test:
-    needs: build
+    needs: build-linux
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     
@@ -155,13 +184,19 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: tictactoe-qt-build-${{ github.sha }}
+        name: tictactoe-linux-${{ github.sha }}
         path: ./build
+        
+    - name: Install Qt 6 runtime
+      run: |
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
         
     - name: Set up virtual display for testing
       run: |
         sudo apt-get update
-        sudo apt-get install -y xvfb qt6-base-dev qt6-multimedia-dev
+        sudo apt-get install -y xvfb libxkbcommon-x11-0
         export DISPLAY=:99
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         sleep 3
@@ -169,13 +204,13 @@ jobs:
     - name: Run basic tests
       run: |
         export DISPLAY=:99
+        export LD_LIBRARY_PATH="${{ github.workspace }}/6.5.0/gcc_64/lib:$LD_LIBRARY_PATH"
         cd build
         chmod +x TTC* 2>/dev/null || true
-        # Add your test commands here
         echo "Tests would run here"
 
   release:
-    needs: [build, build-windows, build-macos]
+    needs: [build-linux, build-windows, build-macos]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     permissions:
@@ -195,22 +230,22 @@ jobs:
         mkdir -p release
         
         # Linux build
-        if [ -d "artifacts/tictactoe-qt-build-${{ github.sha }}" ]; then
-          cd artifacts/tictactoe-qt-build-${{ github.sha }}
+        if [ -d "artifacts/tictactoe-linux-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-linux-${{ github.sha }}"
           tar -czf ../../release/tictactoe-linux-x64.tar.gz *
           cd ../..
         fi
         
         # Windows build
-        if [ -d "artifacts/tictactoe-qt-windows-${{ github.sha }}" ]; then
-          cd artifacts/tictactoe-qt-windows-${{ github.sha }}
+        if [ -d "artifacts/tictactoe-windows-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-windows-${{ github.sha }}"
           zip -r ../../release/tictactoe-windows-x64.zip *
           cd ../..
         fi
         
         # macOS build
-        if [ -d "artifacts/tictactoe-qt-macos-${{ github.sha }}" ]; then
-          cd artifacts/tictactoe-qt-macos-${{ github.sha }}
+        if [ -d "artifacts/tictactoe-macos-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-macos-${{ github.sha }}"
           tar -czf ../../release/tictactoe-macos-x64.tar.gz *
           cd ../..
         fi
@@ -231,7 +266,7 @@ jobs:
         tag_name: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}
         name: TicTacToe Release ${{ steps.version.outputs.RELEASE_DATE }}
         body: |
-          ## TicTacToe Qt Application Release
+          ## TicTacToe Qt 6 Application Release
           
           **Build Date:** ${{ steps.version.outputs.RELEASE_DATE }}
           **Commit:** ${{ github.sha }}
@@ -250,7 +285,9 @@ jobs:
           2. Extract the archive
           3. Run the executable
           
-          **Note:** You may need to install Qt runtime libraries on your system.
+          **Requirements:**
+          - Qt 6.5.0 runtime libraries
+          - For video features: system multimedia codecs
           
         files: |
           release/*
