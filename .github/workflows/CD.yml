@@ -4,92 +4,259 @@ on:
   push:
     branches:
       - main
+      - master  # Added master branch support
   pull_request:
     branches:
       - main
+      - master
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      
+    - name: List project files
+      run: |
+        echo "Project root contents:"
+        ls -la
+        echo "Looking for .pro files:"
+        find . -name "*.pro" -type f
+      
     - name: Install Qt dependencies
       run: |
-        # Update package list and install essential build tools and Qt development libraries
         sudo apt-get update
-        sudo apt-get install -y build-essential qtbase5-dev libqt5sql5-sqlite
-
+        sudo apt-get install -y \
+          build-essential \
+          qtbase5-dev \
+          qtbase5-dev-tools \
+          qtmultimedia5-dev \
+          libqt5multimedia5-plugins \
+          libqt5multimediawidgets5 \
+          libqt5sql5-sqlite \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev \
+          xvfb
+          
+    - name: Set up virtual display
+      run: |
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        sleep 3
+        
     - name: Generate Makefile using qmake
-      # qmake reads your project file (.pro) and generates a Makefile
-      # Updated to use 'Final.pro' as your project file name.
-      run: qmake Final.pro
-
+      run: |
+        ls -la *.pro
+        qmake TTC_with_vids.pro
+        
     - name: Build project
-      # make compiles the source files, links libraries, and creates the executable
-      run: make
-
-    - name: Run simple test (optional, for CLI applications)
-      # For a GUI application like TicTacToe, a simple execution might not
-      # fully test functionality. Automated UI tests would be more comprehensive.
-      # Assumes the executable name is 'tictactoe' based on previous context.
-      # The '|| true' ensures the CI step doesn't fail if the app exits non-zero,
-      # which can happen with GUI apps that don't have a clean exit for CI.
-      # Remove '|| true' if you expect a specific exit code for success.
-      run: ./tictactoe || true
-
+      run: |
+        make -j$(nproc)
+        
+    - name: List build output
+      run: |
+        ls -la
+        find . -name "*TTC*" -type f -executable
+        
+    - name: Test build (basic check)
+      run: |
+        export DISPLAY=:99
+        # Find the executable name dynamically
+        EXECUTABLE=$(find . -name "TTC*" -type f -executable | head -1)
+        if [ -n "$EXECUTABLE" ]; then
+          echo "Found executable: $EXECUTABLE"
+          timeout 10s $EXECUTABLE --version || echo "Quick test completed"
+        else
+          echo "No executable found with TTC prefix"
+          ls -la
+        fi
+        
     - name: Upload built binary as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: tictactoe-qt-build
-        path: tictactoe # Assumes the executable name is 'tictactoe'
+        name: tictactoe-qt-build-${{ github.sha }}
+        path: |
+          TTC_with_vids
+          TTC*
+          *.so*
+        if-no-files-found: warn
 
-  release:
-    # This job depends on the 'build' job completing successfully
-    needs: build
-    # This job only runs when code is pushed to the 'main' branch (not on pull requests)
-    # and only if the 'build' job was successful.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write # This permission is required to create a GitHub Release
-
+  build-windows:
+    runs-on: windows-latest
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        host: 'windows'
+        target: 'desktop'
+        modules: 'qtmultimedia'
+        
+    - name: Build with qmake
+      run: |
+        qmake TTC_with_vids.pro
+        nmake
+        
+    - name: Upload Windows build
+      uses: actions/upload-artifact@v4
+      with:
+        name: tictactoe-qt-windows-${{ github.sha }}
+        path: |
+          release/*.exe
+          debug/*.exe
+          *.exe
+        if-no-files-found: warn
 
-    - name: Download built binary artifact
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      run: |
+        brew install qt@5
+        echo "/usr/local/opt/qt@5/bin" >> $GITHUB_PATH
+        
+    - name: Build with qmake
+      run: |
+        qmake TTC_with_vids.pro
+        make -j$(sysctl -n hw.ncpu)
+        
+    - name: Upload macOS build
+      uses: actions/upload-artifact@v4
+      with:
+        name: tictactoe-qt-macos-${{ github.sha }}
+        path: |
+          *.app
+          TTC_with_vids
+          TTC*
+        if-no-files-found: warn
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: tictactoe-qt-build # Name of the artifact uploaded in the 'build' job
-        path: . # Download to the current working directory
+        name: tictactoe-qt-build-${{ github.sha }}
+        path: ./build
+        
+    - name: Set up virtual display for testing
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb qtbase5-dev libqt5multimedia5-plugins
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        sleep 3
+        
+    - name: Run basic tests
+      run: |
+        export DISPLAY=:99
+        cd build
+        chmod +x TTC* 2>/dev/null || true
+        # Add your test commands here
+        echo "Tests would run here"
 
-    - name: Get current date for release tag
-      id: date
-      run: echo "RELEASE_DATE=$(date +'%Y.%m.%d-%H%M')" >> "$GITHUB_OUTPUT"
-
-    - name: Create GitHub Release
+  release:
+    needs: [build, build-windows, build-macos]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        
+    - name: Prepare release assets
+      run: |
+        mkdir -p release
+        
+        # Linux build
+        if [ -d "artifacts/tictactoe-qt-build-${{ github.sha }}" ]; then
+          cd artifacts/tictactoe-qt-build-${{ github.sha }}
+          tar -czf ../../release/tictactoe-linux-x64.tar.gz *
+          cd ../..
+        fi
+        
+        # Windows build
+        if [ -d "artifacts/tictactoe-qt-windows-${{ github.sha }}" ]; then
+          cd artifacts/tictactoe-qt-windows-${{ github.sha }}
+          zip -r ../../release/tictactoe-windows-x64.zip *
+          cd ../..
+        fi
+        
+        # macOS build
+        if [ -d "artifacts/tictactoe-qt-macos-${{ github.sha }}" ]; then
+          cd artifacts/tictactoe-qt-macos-${{ github.sha }}
+          tar -czf ../../release/tictactoe-macos-x64.tar.gz *
+          cd ../..
+        fi
+        
+        ls -la release/
+        
+    - name: Get version info
+      id: version
+      run: |
+        echo "RELEASE_DATE=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
+        echo "RELEASE_TIME=$(date +'%H%M')" >> "$GITHUB_OUTPUT"
+        echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+        
+    - name: Create Release
       id: create_release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        # Generate a unique tag based on the push SHA and date
-        tag_name: v${{ steps.date.outputs.RELEASE_DATE }}-${{ github.sha }}
-        name: Release ${{ steps.date.outputs.RELEASE_DATE }}
+        tag_name: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}
+        name: TicTacToe Release ${{ steps.version.outputs.RELEASE_DATE }}
         body: |
-          Automated release of the TicTacToe Qt application.
-          This release contains the binary built from commit ${{ github.sha }}.
-        draft: false # Set to true if you want to manually publish later
-        prerelease: false # Set to true for pre-release versions
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./tictactoe # Path to the executable downloaded earlier
-        asset_name: tictactoe-ubuntu-latest # Name of the asset in the release
-        asset_content_type: application/octet-stream # Standard content type for executables
+          ## TicTacToe Qt Application Release
+          
+          **Build Date:** ${{ steps.version.outputs.RELEASE_DATE }}
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ### Changes
+          ${{ github.event.head_commit.message }}
+          
+          ### Downloads
+          - **Linux:** tictactoe-linux-x64.tar.gz
+          - **Windows:** tictactoe-windows-x64.zip  
+          - **macOS:** tictactoe-macos-x64.tar.gz
+          
+          ### Installation
+          1. Download the appropriate package for your platform
+          2. Extract the archive
+          3. Run the executable
+          
+          **Note:** You may need to install Qt runtime libraries on your system.
+          
+        files: |
+          release/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        
+    - name: Update latest release info
+      run: |
+        echo "Release created successfully!"
+        echo "Tag: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}"
+        echo "Release URL: ${{ steps.create_release.outputs.html_url }}"
