@@ -38,23 +38,21 @@ jobs:
 
     - name: Build with qmake
       run: |
-        qmake --version
         qmake TTC_with_vids.pro
         nmake
 
-    - name: Deploy Qt DLLs with windeployqt
+    - name: Deploy Qt dependencies
       run: |
-        "$env:QT_ROOT_DIR\\bin\\windeployqt.exe" TTC_with_vids.exe
-
-    - name: Zip Windows release
-      run: |
-        powershell Compress-Archive -Path TTC_with_vids.exe,*.dll,platforms,multimedia,mediaservice -DestinationPath tictactoe-windows.zip
+        & "$env:QT_ROOT_DIR\bin\windeployqt.exe" TTC_with_vids.exe
 
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
         name: tictactoe-windows-${{ github.sha }}
-        path: tictactoe-windows.zip
+        path: |
+          release/*.exe
+          debug/*.exe
+          TTC_with_vids.exe
         if-no-files-found: warn
 
   build-macos:
@@ -64,21 +62,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Qt 6 using aqt
+    - name: Setup Python virtual environment and install aqt
       run: |
-        python3 -m pip install --upgrade pip
-        pip3 install aqtinstall
-        aqt install-qt mac desktop 6.5.0 clang_64 -m qtmultimedia
+        python3 -m venv venv
+        source venv/bin/activate
+        pip install aqtinstall
+        ./venv/bin/aqt install-qt mac desktop 6.5.0 clang_64 -m qtmultimedia
 
     - name: Set Qt environment
       run: |
-        echo "${{ github.workspace }}/6.5.0/macos/bin" >> $GITHUB_PATH
-        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
-        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/macos" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/6.5.0/clang_64/bin" >> $GITHUB_PATH
+        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/clang_64" >> $GITHUB_ENV
+        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/clang_64" >> $GITHUB_ENV
 
     - name: Build with qmake
       run: |
-        qmake --version
         qmake TTC_with_vids.pro
         make -j$(sysctl -n hw.ncpu)
 
@@ -89,7 +87,6 @@ jobs:
         path: |
           *.app
           TTC_with_vids
-          TTC*
         if-no-files-found: warn
 
   release:
@@ -112,12 +109,12 @@ jobs:
       run: |
         mkdir -p release
 
-        # Windows build
-        if [ -f "artifacts/tictactoe-windows-${{ github.sha }}/tictactoe-windows.zip" ]; then
-          cp artifacts/tictactoe-windows-${{ github.sha }}/tictactoe-windows.zip release/
+        if [ -d "artifacts/tictactoe-windows-${{ github.sha }}" ]; then
+          cd "artifacts/tictactoe-windows-${{ github.sha }}"
+          zip -r ../../release/tictactoe-windows-x64.zip *
+          cd ../..
         fi
 
-        # macOS build
         if [ -d "artifacts/tictactoe-macos-${{ github.sha }}" ]; then
           cd "artifacts/tictactoe-macos-${{ github.sha }}"
           tar -czf ../../release/tictactoe-macos-x64.tar.gz *
@@ -159,7 +156,7 @@ jobs:
           3. Run the executable
 
           **Requirements:**
-          - Qt 6.5.0 runtime libraries (already included)
+          - Qt 6.5.0 runtime libraries
           - For video features: system multimedia codecs
 
         files: |
@@ -168,7 +165,7 @@ jobs:
         prerelease: false
         generate_release_notes: true
 
-    - name: Update latest release info
+    - name: Confirm Release Info
       run: |
         echo "Release created successfully!"
         echo "Tag: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}"
