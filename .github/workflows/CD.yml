@@ -42,19 +42,106 @@ jobs:
         qmake The_Lab.pro
         nmake
         
+    - name: Debug - List build outputs
+      run: |
+        Write-Host "Current directory contents:"
+        Get-ChildItem -Recurse -Name
+        Write-Host "Looking for executable files:"
+        Get-ChildItem -Recurse -Filter "*.exe" | Select-Object FullName
+        
     - name: Deploy Qt dependencies
       run: |
-        mkdir deploy
-        if (Test-Path "release\The_Lab.exe") {
-          Copy-Item "release\The_Lab.exe" "deploy\"
-          windeployqt.exe --qmldir . --compiler-runtime deploy\The_Lab.exe
-        } elseif (Test-Path "debug\The_Lab.exe") {
-          Copy-Item "debug\The_Lab.exe" "deploy\"
-          windeployqt.exe --qmldir . --compiler-runtime --debug deploy\The_Lab.exe
-        } elseif (Test-Path "The_Lab.exe") {
-          Copy-Item "The_Lab.exe" "deploy\"
-          windeployqt.exe --qmldir . --compiler-runtime deploy\The_Lab.exe
+        # Create deploy directory
+        New-Item -ItemType Directory -Force -Path "deploy"
+        
+        # Find the executable
+        $exePath = $null
+        $exeName = "The_Lab.exe"
+        
+        if (Test-Path "release\$exeName") {
+            $exePath = "release\$exeName"
+            Write-Host "Found executable at: release\$exeName"
+        } elseif (Test-Path "debug\$exeName") {
+            $exePath = "debug\$exeName" 
+            Write-Host "Found executable at: debug\$exeName"
+        } elseif (Test-Path $exeName) {
+            $exePath = $exeName
+            Write-Host "Found executable at: $exeName"
+        } else {
+            Write-Host "Executable not found. Available files:"
+            Get-ChildItem -Recurse -Filter "*.exe"
+            exit 1
         }
+        
+        # Copy executable to deploy folder
+        Copy-Item $exePath "deploy\"
+        
+        # Set Qt bin path explicitly
+        $qtBinPath = "${{ github.workspace }}\6.5.0\msvc2019_64\bin"
+        
+        # Check if windeployqt exists
+        $windeployqt = "$qtBinPath\windeployqt.exe"
+        if (-not (Test-Path $windeployqt)) {
+            Write-Host "windeployqt.exe not found at: $windeployqt"
+            Write-Host "Contents of Qt bin directory:"
+            Get-ChildItem $qtBinPath
+            exit 1
+        }
+        
+        # Run windeployqt with more verbose output and error handling
+        Write-Host "Running windeployqt..."
+        Write-Host "Command: $windeployqt --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime deploy\$exeName"
+        
+        try {
+            & $windeployqt --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime "deploy\$exeName" 2>&1 | Tee-Object -Variable output
+            Write-Host "windeployqt output:"
+            Write-Host $output
+            
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "windeployqt failed with exit code: $LASTEXITCODE"
+                Write-Host "Trying alternative approach..."
+                
+                # Try with minimal options
+                & $windeployqt --compiler-runtime "deploy\$exeName" 2>&1 | Tee-Object -Variable output2
+                Write-Host "Alternative windeployqt output:"
+                Write-Host $output2
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Both windeployqt attempts failed. Proceeding with manual deployment..."
+                    
+                    # Manual deployment - copy essential Qt DLLs
+                    $qtDlls = @(
+                        "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", 
+                        "Qt6Multimedia.dll", "Qt6MultimediaWidgets.dll",
+                        "Qt6Network.dll", "Qt6Sql.dll"
+                    )
+                    
+                    foreach ($dll in $qtDlls) {
+                        $dllPath = "$qtBinPath\$dll"
+                        if (Test-Path $dllPath) {
+                            Copy-Item $dllPath "deploy\"
+                            Write-Host "Copied $dll"
+                        }
+                    }
+                    
+                    # Copy platforms plugin
+                    $platformsDir = "${{ github.workspace }}\6.5.0\msvc2019_64\plugins\platforms"
+                    if (Test-Path $platformsDir) {
+                        New-Item -ItemType Directory -Force -Path "deploy\platforms"
+                        Copy-Item "$platformsDir\qwindows.dll" "deploy\platforms\" -ErrorAction SilentlyContinue
+                        Copy-Item "$platformsDir\qminimal.dll" "deploy\platforms\" -ErrorAction SilentlyContinue
+                        Write-Host "Copied platform plugins"
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Host "Exception occurred: $_.Exception.Message"
+            Write-Host "Proceeding with basic deployment..."
+        }
+        
+        Write-Host "Final deploy folder contents:"
+        Get-ChildItem "deploy" -Recurse
         
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
@@ -62,7 +149,7 @@ jobs:
         name: tictactoe-windows-${{ github.sha }}
         path: |
           deploy/*
-        if-no-files-found: warn
+        if-no-files-found: error
 
   build-macos:
     runs-on: macos-latest
@@ -88,6 +175,20 @@ jobs:
         qmake --version
         qmake The_Lab.pro
         make -j$(sysctl -n hw.ncpu)
+        
+    - name: Debug - List build outputs
+      run: |
+        echo "Current directory contents:"
+        find . -name "*.app" -o -name "The_Lab*" | head -20
+        
+    - name: Deploy macOS app (if .app bundle exists)
+      run: |
+        if [ -d "The_Lab.app" ]; then
+          echo "Found .app bundle, running macdeployqt..."
+          ${{ github.workspace }}/6.5.0/macos/bin/macdeployqt The_Lab.app
+        else
+          echo "No .app bundle found, skipping macdeployqt"
+        fi
         
     - name: Upload macOS build
       uses: actions/upload-artifact@v4
@@ -123,7 +224,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev \
           libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
-          libasound2-dev libpulse-dev
+          libasound2-dev libpulse-dev libfontconfig1-dev libfreetype6-dev \
+          libx11-dev libxkbcommon-x11-dev
         
     - name: Build with qmake
       run: |
