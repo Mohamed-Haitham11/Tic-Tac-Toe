@@ -2,13 +2,9 @@ name: TicTacToe Qt CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
   build-windows:
@@ -18,7 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Qt 6 using aqt
+    - name: Install Qt 6 with AQT
       run: |
         python -m pip install --upgrade pip
         pip install aqtinstall
@@ -40,19 +36,25 @@ jobs:
       run: |
         qmake TTC_with_vids.pro
         nmake
+        dir
 
-    - name: Deploy Qt dependencies
+    - name: Deploy with windeployqt
       run: |
-        & "$env:QT_ROOT_DIR\bin\windeployqt.exe" TTC_with_vids.exe
+        if (Test-Path "release\TTC_with_vids.exe") {
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" "release\TTC_with_vids.exe"
+        } elseif (Test-Path "debug\TTC_with_vids.exe") {
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" "debug\TTC_with_vids.exe"
+        } else {
+          throw "TTC_with_vids.exe not found."
+        }
 
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
         name: tictactoe-windows-${{ github.sha }}
         path: |
-          release/*.exe
-          debug/*.exe
-          TTC_with_vids.exe
+          release/**/*.exe
+          debug/**/*.exe
         if-no-files-found: warn
 
   build-macos:
@@ -62,7 +64,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup Python virtual environment and install aqt
+    - name: Install Qt with aqt
       run: |
         python3 -m venv venv
         source venv/bin/activate
@@ -77,6 +79,7 @@ jobs:
 
     - name: Build with qmake
       run: |
+        export PATH="${QT_ROOT_DIR}/bin:$PATH"
         qmake TTC_with_vids.pro
         make -j$(sysctl -n hw.ncpu)
 
@@ -121,52 +124,32 @@ jobs:
           cd ../..
         fi
 
-        ls -la release/
-
     - name: Get version info
       id: version
       run: |
         echo "RELEASE_DATE=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
-        echo "RELEASE_TIME=$(date +'%H%M')" >> "$GITHUB_OUTPUT"
         echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
-    - name: Create Release
+    - name: Create GitHub Release
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}
         name: TicTacToe Release ${{ steps.version.outputs.RELEASE_DATE }}
         body: |
-          ## TicTacToe Qt 6 Application Release
+          ## Qt TicTacToe Release
+          - Commit: ${{ github.sha }}
+          - Branch: ${{ github.ref_name }}
 
-          **Build Date:** ${{ steps.version.outputs.RELEASE_DATE }}
-          **Commit:** ${{ github.sha }}
-          **Branch:** ${{ github.ref_name }}
+          ### Downloads:
+          - Windows: tictactoe-windows-x64.zip
+          - macOS: tictactoe-macos-x64.tar.gz
 
-          ### Changes
-          ${{ github.event.head_commit.message }}
-
-          ### Downloads
-          - **Windows:** tictactoe-windows-x64.zip  
-          - **macOS:** tictactoe-macos-x64.tar.gz
-
-          ### Installation
-          1. Download the appropriate package for your platform
-          2. Extract the archive
-          3. Run the executable
-
-          **Requirements:**
-          - Qt 6.5.0 runtime libraries
-          - For video features: system multimedia codecs
-
-        files: |
-          release/*
+        files: release/*
         draft: false
         prerelease: false
         generate_release_notes: true
 
-    - name: Confirm Release Info
+    - name: Confirm release
       run: |
-        echo "Release created successfully!"
-        echo "Tag: v${{ steps.version.outputs.RELEASE_DATE }}-${{ steps.version.outputs.SHORT_SHA }}"
-        echo "Release URL: ${{ steps.create_release.outputs.html_url }}"
+        echo "Release created at: ${{ steps.create_release.outputs.html_url }}"
