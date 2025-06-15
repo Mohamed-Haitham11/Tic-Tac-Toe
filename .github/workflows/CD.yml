@@ -42,14 +42,26 @@ jobs:
         qmake The_Lab.pro
         nmake
         
+    - name: Deploy Qt dependencies
+      run: |
+        mkdir deploy
+        if (Test-Path "release\The_Lab.exe") {
+          Copy-Item "release\The_Lab.exe" "deploy\"
+          windeployqt.exe --qmldir . --compiler-runtime deploy\The_Lab.exe
+        } elseif (Test-Path "debug\The_Lab.exe") {
+          Copy-Item "debug\The_Lab.exe" "deploy\"
+          windeployqt.exe --qmldir . --compiler-runtime --debug deploy\The_Lab.exe
+        } elseif (Test-Path "The_Lab.exe") {
+          Copy-Item "The_Lab.exe" "deploy\"
+          windeployqt.exe --qmldir . --compiler-runtime deploy\The_Lab.exe
+        }
+        
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
       with:
         name: tictactoe-windows-${{ github.sha }}
         path: |
-          release/*.exe
-          debug/*.exe
-          *.exe
+          deploy/*
         if-no-files-found: warn
 
   build-macos:
