@@ -14,438 +14,496 @@
 #include <QDateTime>
 #include <QSqlError>
 #include <QDebug>
-#include <QObject> // Added for QOverload
-#include <QOverload>
+#include <QFile>
+// Define static const members
+const char TicTacToe::EMPTY = ' ';
+const char TicTacToe::PLAYER1 = 'X';
+const char TicTacToe::PLAYER2 = 'O';
 // ==================== Constructor ====================
 TicTacToe::TicTacToe(QWidget *parent) : QMainWindow(parent) {
+    // Initialize game state variables
+    board = std::vector<char>(9, EMPTY);
+    currentPlayer = PLAYER1;
+    mode = 1; // Default to PvP
+    difficulty = 1; // Default to Easy
+    totalGames = 3;
+    gamesToWin = 2;
+    player1Wins = 0;
+    player2Wins = 0;
+    ties = 0;
+    scoreboardVisible = false;
+    firstMoveMade = false;
+    guestMode = false;
+    selectedTheme = "Light";
+    replayIndex = 0;
+    isRecording = false;
+    currentMatchId = 0;
+
     setupUI();
     connectToDatabase();
     createTablesIfNeeded();
+    setupVideoRecording();
+    setupVideoPlayback();
+    createVideoDirectory();
     applyStyleSheet();
     resetGame();
 }
-QString currentUsername ;
 
-// ==================== UI Setup ====================
-// (setupUI() - Full UI Setup for Login, Mode selection, Difficulty selection, Player 2 name, Settings, Game Board)
-void TicTacToe::setupUI() {
-    stackedWidget = new QStackedWidget(this);
-    // === Login Screen (Index 0) ===
-    QWidget *loginWidget = new QWidget();
-    QVBoxLayout *loginLayout = new QVBoxLayout(loginWidget);
-    QHBoxLayout *logoRowLayout = new QHBoxLayout();
-    QLabel *logoLabel = new QLabel(this);
-    logoLabel->setFixedSize(100, 100);
-    logoLabel->setObjectName("themeLogo");
-    logoRowLayout->addWidget(logoLabel);
-    logoRowLayout->addStretch();
-    loginLayout->addLayout(logoRowLayout);
-    QLabel *loginTitle = new QLabel("Tic Tac Toe Login", this);
-    loginTitle->setAlignment(Qt::AlignCenter);
-    loginTitle->setFont(QFont("Arial", 18, QFont::Bold));
-
-    usernameEdit = new QLineEdit(this);
-    usernameEdit->setPlaceholderText("Username");
-    usernameEdit->setMinimumHeight(40);
-    passwordEdit = new QLineEdit(this);
-    passwordEdit->setPlaceholderText("Password");
-    passwordEdit->setEchoMode(QLineEdit::Password);
-    passwordEdit->setMinimumHeight(40);
-
-    QPushButton *loginButton = new QPushButton("Login", this);
-    loginButton->setMinimumHeight(50);
-    connect(loginButton, &QPushButton::clicked, this, &TicTacToe::handleLogin);
-    QPushButton *registerButton = new QPushButton("Register", this);
-    registerButton->setMinimumHeight(40);
-    connect(registerButton, &QPushButton::clicked, this, &TicTacToe::registerAccount);
-
-    QPushButton *guestButton = new QPushButton("Play as Guest", this);
-    guestButton->setMinimumHeight(40);
-    connect(guestButton, &QPushButton::clicked, this, &TicTacToe::guestLogin);
-
-    themeSelector = new QComboBox(this);
-    themeSelector->addItems({"Light", "Dark", "Blue", "Plywood", "S.P.Q.R", "Carthago", "Frosted Glass", "Ancient Egypt", "Seljuk Empire","8-Bit","Cyber Enhanced"});
-    themeSelector->setCurrentText("Light");
-    connect(themeSelector, &QComboBox::currentTextChanged, this, [this](const QString &theme) {
-        selectedTheme = theme;
-        applyStyleSheet();
-    });
-    loginLayout->addSpacing(10);
-    loginLayout->addWidget(loginTitle);
-    loginLayout->addSpacing(20);
-    loginLayout->addWidget(usernameEdit);
-    loginLayout->addWidget(passwordEdit);
-    loginLayout->addSpacing(20);
-    loginLayout->addWidget(loginButton);
-    loginLayout->addWidget(registerButton);
-    loginLayout->addWidget(guestButton);
-    loginLayout->addSpacing(10);
-    loginLayout->addWidget(themeSelector);
-    loginLayout->addStretch();
-    stackedWidget->addWidget(loginWidget);
-    // === Mode Selection Screen (Index 1) ===
-    QWidget *modeSelectionWidget = new QWidget();
-    QVBoxLayout *modeSelectionLayout = new QVBoxLayout(modeSelectionWidget);
-
-    QLabel *modeSelectionTitle = new QLabel("Select Game Mode", this);
-    modeSelectionTitle->setAlignment(Qt::AlignCenter);
-    modeSelectionTitle->setFont(QFont("Arial", 24, QFont::Bold));
-    QPushButton *pvpButton = new QPushButton("Player vs Player", this);
-    QPushButton *pveButton = new QPushButton("Player vs AI", this);
-    QString bigButtonStyle = "QPushButton { padding: 30px; font-size: 18px; font-weight: bold; }";
-    pvpButton->setStyleSheet(bigButtonStyle);
-    pveButton->setStyleSheet(bigButtonStyle);
-
-    connect(pvpButton, &QPushButton::clicked, this, &TicTacToe::setPlayerVsPlayer);
-    connect(pveButton, &QPushButton::clicked, this, &TicTacToe::setPlayerVsAI);
-    QPushButton *historyButton = new QPushButton("View Match History", this);
-    historyButton->setMinimumHeight(40);
-    connect(historyButton, &QPushButton::clicked, this, &TicTacToe::loadMatchHistory);
-    QPushButton *logoutButtonMode = new QPushButton("Logout", this);
-    logoutButtonMode->setMaximumWidth(100);
-    connect(logoutButtonMode, &QPushButton::clicked, this, &TicTacToe::logout);
-    QPushButton *backToLoginButton = new QPushButton("Back", this);
-    backToLoginButton->setMaximumWidth(100);
-    connect(backToLoginButton, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(0); // Go back to login screen
-    });
-    /*QPushButton *modeNightModeButton = new QPushButton("Night Mode", this);
-    modeNightModeButton->setMaximumWidth(100);
-    connect(modeNightModeButton, &QPushButton::clicked, this, &TicTacToe::toggleNightMode);*/
-
-    modeSelectionLayout->addWidget(modeSelectionTitle);
-    modeSelectionLayout->addSpacing(30);
-    modeSelectionLayout->addWidget(pvpButton);
-    modeSelectionLayout->addWidget(pveButton);
-    modeSelectionLayout->addSpacing(20);
-    modeSelectionLayout->addWidget(historyButton);
-    modeSelectionLayout->addStretch();
-    QHBoxLayout *modeBtnsLayout = new QHBoxLayout();
-    modeBtnsLayout->addWidget(logoutButtonMode);
-    //modeBtnsLayout->addWidget(modeNightModeButton);
-    modeSelectionLayout->addLayout(modeBtnsLayout);
-    modeBtnsLayout->addWidget(backToLoginButton);
-    // === Game Screen (Index 2) ===
-    QWidget *gameWidget = new QWidget();
-    QVBoxLayout *mainLayout = new QVBoxLayout(gameWidget);
-    // Header Row
-    QHBoxLayout *headerLayout = new QHBoxLayout();
-
-    QPushButton *backButton = new QPushButton("Back", this);
-    backButton->setMaximumWidth(100);
-    connect(backButton, &QPushButton::clicked, this, &TicTacToe::backToModeSelection);
-
-    scoreboardToggleButton = new QPushButton("Show Scoreboard", this);
-    scoreboardToggleButton->setMaximumWidth(150);
-    connect(scoreboardToggleButton, &QPushButton::clicked, this, &TicTacToe::toggleScoreboard);
-    QPushButton *surrenderButton = new QPushButton("🏳️ Surrender", this);
-    surrenderButton->setMaximumWidth(130);
-    connect(surrenderButton, &QPushButton::clicked, this, &TicTacToe::handleSurrender);
-
-    QPushButton *logoutButton = new QPushButton("Logout", this);
-    logoutButton->setMaximumWidth(100);
-    connect(logoutButton, &QPushButton::clicked, this, &TicTacToe::logout);
-
-    // Arrange header layout
-    headerLayout->addWidget(backButton);
-    headerLayout->addWidget(scoreboardToggleButton);
-    headerLayout->addStretch();
-    headerLayout->addWidget(surrenderButton);
-    headerLayout->addWidget(logoutButton);
-    mainLayout->addLayout(headerLayout);
-    // Scoreboard
-    scoreLabel = new QLabel(this);
-    scoreLabel->setAlignment(Qt::AlignCenter);
-    scoreLabel->setFont(QFont("Arial", 14, QFont::Bold));
-    scoreLabel->setStyleSheet("QLabel { background-color: #f0f0f0; border: 1px solid #ccc; padding: 10px; }");
-    scoreLabel->setVisible(scoreboardVisible);
-    mainLayout->addWidget(scoreLabel);
-    // Game Grid
-    QGridLayout *gridLayout = new QGridLayout();
-    buttonGroup = new QButtonGroup(this);
-    for (int i = 0; i < 9; i++) {
-        QPushButton *button = new QPushButton("", this);
-        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        button->setMinimumSize(100, 100);
-        button->setFont(QFont("Arial", 36, QFont::Bold));
-        button->setStyleSheet("QPushButton { border: 2px solid #aaa; }");
-        gridLayout->addWidget(button, i / 3, i % 3);
-        buttonGroup->addButton(button, i);
-    }
-
-    // FIX: Use QOverload to specify which buttonClicked signal to connect to
-    connect(buttonGroup, &QButtonGroup::buttonClicked,
-            this, [this](QAbstractButton* button) {
-                int id = buttonGroup->id(button);
-                handleButtonClick(id);
-            });
-    mainLayout->addLayout(gridLayout);
-
-    // Game Status Label
-    statusLabel = new QLabel("Player O's turn", this);
-    statusLabel->setAlignment(Qt::AlignCenter);
-    statusLabel->setFont(QFont("Arial", 16));
-    mainLayout->addWidget(statusLabel);
-    // === Difficulty Selection (Index 3) ===
-    QWidget *difficultyWidget = new QWidget();
-    QVBoxLayout *difficultyLayout = new QVBoxLayout(difficultyWidget);
-    QLabel *difficultyTitle = new QLabel("Select AI Difficulty", this);
-    difficultyTitle->setAlignment(Qt::AlignCenter);
-    difficultyTitle->setFont(QFont("Arial", 24, QFont::Bold));
-
-    QPushButton *easyButton = new QPushButton("Easy", this);
-    QPushButton *mediumButton = new QPushButton("Medium", this);
-    QPushButton *hardButton = new QPushButton("Hard", this);
-
-    easyButton->setStyleSheet(bigButtonStyle);
-    mediumButton->setStyleSheet(bigButtonStyle);
-    hardButton->setStyleSheet(bigButtonStyle);
-    QPushButton *backToModeButton = new QPushButton("Back", this);
-    backToModeButton->setMaximumWidth(100);
-    connect(backToModeButton, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(1); // Back to mode selection
-    });
-    connect(easyButton, &QPushButton::clicked, this, &TicTacToe::setDifficultyEasy);
-    connect(mediumButton, &QPushButton::clicked, this, &TicTacToe::setDifficultyMedium);
-    connect(hardButton, &QPushButton::clicked, this, &TicTacToe::setDifficultyHard);
-
-    difficultyLayout->addWidget(difficultyTitle);
-    difficultyLayout->addSpacing(30);
-    difficultyLayout->addWidget(easyButton);
-    difficultyLayout->addWidget(mediumButton);
-    difficultyLayout->addWidget(hardButton);
-    difficultyLayout->addSpacing(20);
-    difficultyLayout->addWidget(backToModeButton);
-    /*QPushButton *diffNightModeButton = new QPushButton("Night Mode", this);
-    diffNightModeButton->setMaximumWidth(100);
-    connect(diffNightModeButton, &QPushButton::clicked, this, &TicTacToe::toggleNightMode);
-    difficultyLayout->addWidget(diffNightModeButton);*/
-
-    // === Player 2 Name Input (Index 4) ===
-    QWidget *nameInputWidget = new QWidget();
-    QVBoxLayout *nameInputLayout = new QVBoxLayout(nameInputWidget);
-
-    QLabel *nameInputTitle = new QLabel("Enter Player 2 Name", this);
-    nameInputTitle->setAlignment(Qt::AlignCenter);
-    nameInputTitle->setFont(QFont("Arial", 24, QFont::Bold));
-    player2NameEdit = new QLineEdit(this);
-    player2NameEdit->setPlaceholderText("Player 2 Name");
-    player2NameEdit->setMinimumHeight(40);
-
-    QPushButton *startGameButton = new QPushButton("Start Game", this);
-    startGameButton->setMinimumHeight(50);
-    connect(startGameButton, &QPushButton::clicked, this, &TicTacToe::startPvPWithNames);
-    nameInputLayout->addWidget(nameInputTitle);
-    nameInputLayout->addSpacing(30);
-    nameInputLayout->addWidget(player2NameEdit);
-    nameInputLayout->addWidget(startGameButton);
-    QPushButton *backToSettingsButton = new QPushButton("Back", this);
-    backToSettingsButton->setMaximumWidth(100);
-    connect(backToSettingsButton, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(5); // Go back to settings screen
-    });
-    nameInputLayout->addWidget(backToSettingsButton);
-
-    // === Settings Screen (Index 5) ===
-    QWidget *settingsWidget = new QWidget();
-    QVBoxLayout *settingsLayout = new QVBoxLayout(settingsWidget);
-
-    QLabel *settingsTitle = new QLabel("Game Settings", this);
-    settingsTitle->setAlignment(Qt::AlignCenter);
-    settingsTitle->setFont(QFont("Arial", 24, QFont::Bold));
-    QHBoxLayout *totalGamesLayout = new QHBoxLayout();
-    QLabel *totalGamesLabel = new QLabel("Total Games:", this);
-    totalGamesSpinBox = new QSpinBox(this);
-    totalGamesSpinBox->setRange(1, 10);
-    totalGamesSpinBox->setValue(totalGames);
-    totalGamesLayout->addWidget(totalGamesLabel);
-    totalGamesLayout->addWidget(totalGamesSpinBox);
-
-    QHBoxLayout *gamesToWinLayout = new QHBoxLayout();
-    QLabel *gamesToWinLabel = new QLabel("Games to Win:", this);
-    gamesToWinSpinBox = new QSpinBox(this);
-    gamesToWinSpinBox->setRange(1, 10);
-    gamesToWinSpinBox->setValue(gamesToWin);
-    gamesToWinLayout->addWidget(gamesToWinLabel);
-    gamesToWinLayout->addWidget(gamesToWinSpinBox);
-
-    QPushButton *applySettingsButton = new QPushButton("Apply Settings", this);
-    applySettingsButton->setMinimumHeight(50);
-    connect(applySettingsButton, &QPushButton::clicked, this, &TicTacToe::applyGameSettings);
-
-    settingsLayout->addWidget(settingsTitle);
-    settingsLayout->addSpacing(20);
-    settingsLayout->addLayout(totalGamesLayout);
-    settingsLayout->addLayout(gamesToWinLayout);
-    settingsLayout->addWidget(applySettingsButton);
-    QPushButton *backToModeButton2 = new QPushButton("Back", this);
-    backToModeButton2->setMaximumWidth(100);
-    connect(backToModeButton2, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(1); // Back to mode selection
-    });
-    settingsLayout->addWidget(backToModeButton2);
-    // === Match History Screen (Index 6) ===
-    QWidget *historyWidget = new QWidget();
-    QVBoxLayout *historyLayout = new QVBoxLayout(historyWidget);
-
-    QLabel *historyTitle = new QLabel("Match History", this);
-    historyTitle->setAlignment(Qt::AlignCenter);
-    historyTitle->setFont(QFont("Arial", 24, QFont::Bold));
-
-    matchHistoryTable = new QTableWidget(this);
-    matchHistoryTable->setColumnCount(5);
-    matchHistoryTable->setHorizontalHeaderLabels({"Date", "Player 1", "Player 2", "Winner", "Result"});
-    matchHistoryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    matchHistoryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    connect(backButton, &QPushButton::clicked, this, [this]() {
-        stackedWidget->setCurrentIndex(1); // Return to mode selection
-    });
-    historyLayout->addWidget(historyTitle);
-    historyLayout->addWidget(matchHistoryTable);
-    historyLayout->addWidget(backButton);
-
-    // === Add Widgets to Stacked Widget ===
-    stackedWidget->addWidget(loginWidget); // 0
-    stackedWidget->addWidget(modeSelectionWidget);  // 1
-    stackedWidget->addWidget(gameWidget);           // 2
-    stackedWidget->addWidget(difficultyWidget);     // 3
-    stackedWidget->addWidget(nameInputWidget);      // 4
-    stackedWidget->addWidget(settingsWidget);       // 5
-    stackedWidget->addWidget(historyWidget);        // 6
-
-
-    setCentralWidget(stackedWidget);
-    setWindowTitle("Tic Tac Toe");
+// ==================== Mode Selection ====================
+void TicTacToe::setPlayerVsPlayer() {
+    mode = 1;
+    stackedWidget->setCurrentIndex(5);
 }
 
+void TicTacToe::setPlayerVsAI() {
+    mode = 2;
+    stackedWidget->setCurrentIndex(3);
+}
 
-// ==================== Theme Application ====================
-// (applyStyleSheet())
-void TicTacToe::applyStyleSheet() {
-    QString style;
-    if (selectedTheme == "Dark") {
-        style = "QWidget { background-color: #2D2D2D; color: #E0E0E0; }"
-                "QLabel { color: #E0E0E0; }"
-                "QLineEdit { background-color: #3D3D3D; color: #E0E0E0; border: 1px solid #5D5D5D; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #3D3D3D; color: #E0E0E0; border: 1px solid #5D5D5D; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #4D4D4D; }"
-                "QPushButton:pressed { background-color: #5D5D5D; }"
-                "QSpinBox { background-color: #3D3D3D; color: #E0E0E0; border: 1px solid #5D5D5D; border-radius: 4px; padding: 5px; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #3D3D3D; color: #E0E0E0; border: 1px solid #555555; padding: 10px; }");
-    }
-    else if (selectedTheme == "Blue") {
-        style = "QWidget { background-color: #1E1E40; color: #FFFFFF; }"
-                "QLabel { color: #FFFFFF; }"
-                "QLineEdit { background-color: #304070; color: #FFFFFF; border: 1px solid #506090; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #304070; color: #FFFFFF; border: 1px solid #506090; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #4060A0; }"
-                "QPushButton:pressed { background-color: #5070C0; }"
-                "QSpinBox { background-color: #304070; color: #FFFFFF; border: 1px solid #506090; border-radius: 4px; padding: 5px; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #2B3A67; color: #FFFFFF; border: 1px solid #4060A0; padding: 10px; }");
-    }
-    else if (selectedTheme == "Plywood") {
-        style = "QWidget { background-color: #D7C4A3; color: #4E342E; }"
-                "QLabel { color: #4E342E; }"
-                "QLineEdit, QSpinBox { background-color: #EFEBE9; color: #4E342E; border: 1px solid #8D6E63; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #BCAAA4; color: #3E2723; border: 1px solid #8D6E63; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #A1887F; }"
-                "QPushButton:pressed { background-color: #8D6E63; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #EFEBE9; color: #4E342E; border: 1px solid #8D6E63; padding: 10px; }");
-    }
-    else if (selectedTheme == "S.P.Q.R") {
-        style = "QWidget { background-color: #6E1414; color: #FFD700; }"
-                "QLabel { color: #FFD700; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #9E1B1B; color: #FFD700; border: 1px solid #B22222; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #800000; color: #FFD700; border: 1px solid #B22222; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #A52A2A; }"
-                "QPushButton:pressed { background-color: #B22222; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #9E1B1B; color: #FFD700; border: 1px solid #B22222; padding: 10px; }");
-    }
-    else if (selectedTheme == "Carthago") {
-        style = "QWidget { background-color: #3E1F47; color: #FFFFFF; }"
-                "QLabel { color: #FFFFFF; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #5C2E7E; color: #FFFFFF; border: 1px solid #8A4FAD; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #6A1B9A; color: #FFFFFF; border: 1px solid #9C4DCC; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #7E57C2; }"
-                "QPushButton:pressed { background-color: #9C4DCC; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #5C2E7E; color: #FFFFFF; border: 1px solid #9C4DCC; padding: 10px; }");
-    }
-    else if (selectedTheme == "Frosted Glass") {
-        style = "QWidget { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #E0F7FA, stop:1 #B2EBF2); color: #003E57; }"
-                "QLabel { color: #003E57; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: rgba(255, 255, 255, 0.7); color: #003E57; border: 1px solid #B0BEC5; border-radius: 6px; padding: 5px; }"
-                "QPushButton { background-color: rgba(255, 255, 255, 0.8); color: #004D60; border: 1px solid #90A4AE; border-radius: 6px; padding: 8px; }"
-                "QPushButton:hover { background-color: rgba(255, 255, 255, 0.9); }"
-                "QPushButton:pressed { background-color: #CFD8DC; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: rgba(255, 255, 255, 0.6); color: #004D60; border: 1px solid #B0BEC5; padding: 10px; }");
-    }
-    else if (selectedTheme == "Ancient Egypt") {
-        style = "QWidget { background-color: #F5E5B8; color: #5C432E; }"
-                "QLabel { color: #5C432E; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #F9F3D2; color: #5C432E; border: 1px solid #CBB67C; border-radius: 5px; padding: 5px; }"
-                "QPushButton { background-color: #E5C56E; color: #4E342E; border: 1px solid #B79850; border-radius: 5px; padding: 8px; }"
-                "QPushButton:hover { background-color: #DFC276; }"
-                "QPushButton:pressed { background-color: #CBB67C; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #F9F3D2; color: #5C432E; border: 1px solid #CBB67C; padding: 10px; }");
-    }
-    else if (selectedTheme == "Seljuk Empire") {
-        style = "QWidget { background-color: #0D3B66; color: #FAF0E6; }"
-                "QLabel { color: #FAF0E6; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #145DA0; color: #FFFFFF; border: 1px solid #1E81B0; border-radius: 6px; padding: 5px; }"
-                "QPushButton { background-color: #1E81B0; color: #FFFFFF; border: 1px solid #63A4FF; border-radius: 6px; padding: 8px; }"
-                "QPushButton:hover { background-color: #63A4FF; }"
-                "QPushButton:pressed { background-color: #145DA0; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #145DA0; color: #FFFFFF; border: 1px solid #63A4FF; padding: 10px; }");
-    }
-    else if (selectedTheme == "Cyber Enhanced") {
-        style = "QWidget { background-color: #0F0F0F; color: #00FFEA; }"
-                "QLabel { color: #00FFEA; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #1F1F1F; color: #00FFEA; border: 1px solid #00FFEA; border-radius: 6px; padding: 6px; }"
-                "QPushButton { background-color: #1F1F1F; color: #00FFEA; border: 1px solid #00FFEA; border-radius: 6px; padding: 8px; }"
-                "QPushButton:hover { background-color: #00FFEA; color: #0F0F0F; }"
-                "QPushButton:pressed { background-color: #0F0F0F; color: #00FFEA; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #1F1F1F; color: #00FFEA; border: 1px solid #00FFEA; padding: 10px; }");
-    }
-    else if (selectedTheme == "8-Bit") {
-        style = "QWidget { background-color: #282828; color: #FFD700; font-family: 'Courier New'; }"
-                "QLabel { color: #FFD700; font-weight: bold; }"
-                "QLineEdit, QSpinBox { background-color: #404040; color: #FFD700; border: 2px solid #FFD700; border-radius: 0px; padding: 6px; font-family: 'Courier New'; }"
-                "QPushButton { background-color: #404040; color: #FFD700; border: 2px solid #FFD700; padding: 8px; font-family: 'Courier New'; }"
-                "QPushButton:hover { background-color: #606060; }"
-                "QPushButton:pressed { background-color: #303030; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #303030; color: #FFD700; border: 2px solid #FFD700; padding: 10px; font-family: 'Courier New'; }");
+void TicTacToe::setDifficultyEasy() {
+    difficulty = 1;
+    stackedWidget->setCurrentIndex(5);
+}
+
+void TicTacToe::setDifficultyMedium() {
+    difficulty = 2;
+    stackedWidget->setCurrentIndex(5);
+}
+
+void TicTacToe::setDifficultyHard() {
+    difficulty = 3;
+    stackedWidget->setCurrentIndex(5);
+}
+
+// ==================== Game Settings and Start ====================
+void TicTacToe::applyGameSettings() {
+    totalGames = totalGamesSpinBox->value();
+    gamesToWin = gamesToWinSpinBox->value();
+
+    if (gamesToWin > totalGames) {
+        QMessageBox::warning(this, "Invalid Settings", "Games to win cannot be greater than total games!");
+        return;
     }
 
-    else {
-        // Light theme (default)
-        style = "QWidget { background-color: #F5F5F5; color: #333333; }"
-                "QLabel { color: #333333; }"
-                "QLineEdit { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC; border-radius: 4px; padding: 5px; }"
-                "QPushButton { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC; border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background-color: #EEEEEE; }"
-                "QPushButton:pressed { background-color: #DDDDDD; }"
-                "QSpinBox { background-color: #FFFFFF; color: #333333; border: 1px solid #CCCCCC; border-radius: 4px; padding: 5px; }";
-        scoreLabel->setStyleSheet("QLabel { background-color: #F0F0F0; color: #333333; border: 1px solid #CCCCCC; padding: 10px; }");
+    if (mode == 1) {
+        if (guestMode) {
+            player1Name = "Player 1";
+            player2Name = "Player 2";
+            stackedWidget->setCurrentIndex(2);
+            resetGame();
+        } else {
+            stackedWidget->setCurrentIndex(4);
+        }
+    } else {
+        stackedWidget->setCurrentIndex(2);
+        // In AI mode: AI is always X (PLAYER1), Human is always O (PLAYER2)
+        player1Name = "AI";
+        player2Name = loggedInUser.isEmpty() ? "Player" : loggedInUser;
+        resetGame();
+    }
+}
+void TicTacToe::startPvPWithNames() {
+    QString player2InputName = player2NameEdit->text();
+    if (!player2InputName.isEmpty()) {
+        player2Name = player2InputName;
+    } else {
+        player2Name = "Player 2";
+    }
+    player2NameEdit->clear();
+    player1Name = loggedInUser.isEmpty() ? "Player 1" : loggedInUser;
+    stackedWidget->setCurrentIndex(2);
+    resetGame();
+}
+
+// ==================== Core Game Logic ====================
+void TicTacToe::resetGame() {
+    if (player1Wins >= gamesToWin || player2Wins >= gamesToWin ||
+        (player1Wins + player2Wins + ties) >= totalGames) {
+        backToModeSelection();
+        return;
     }
 
-    setStyleSheet(style);
-    for (int i = 0; i < 9; ++i) {
+    board = std::vector<char>(9, EMPTY);
+    moveHistory.clear();
+    firstMoveMade = false; // Reset first move flag
+
+    // Randomly decide who starts (50% chance for AI or player)
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    if (gen() % 2 == 0) {
+        currentPlayer = PLAYER1; // AI starts
+        if (mode == 2) {
+            QTimer::singleShot(500, this, [this]() { makeAIMove(); });
+        }
+    } else {
+        currentPlayer = PLAYER2; // Player starts
+    }
+
+    // Clear video path for new game (only if not recording)
+    if (!isRecording) {
+        currentVideoPath.clear();
+        currentMatchId = 0;
+    }
+
+    scoreboardVisible = false;
+    scoreLabel->setVisible(scoreboardVisible);
+    if (scoreboardToggleButton) {
+        scoreboardToggleButton->setText("Show Scoreboard");
+    }
+
+    updateScoreboard();
+    updateBoard();
+    updateStatus();
+
+    for (int i = 0; i < 9; i++) {
         QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
         if (button) {
-            button->setStyleSheet("QPushButton { font-weight: bold; font-size: 24px; padding: 10px; }");
+            button->setText("");
+            button->setEnabled(true);
         }
-    }
-    QLabel *logo = findChild<QLabel*>("themeLogo");
-    if (logo) {
-        QString themeKey = selectedTheme.toLower().replace(" ", "_").replace(".", "");
-        QString logoPath = QString(":/logos/%1.png").arg(themeKey);
-        QPixmap pixmap(logoPath);
-        logo->setPixmap(pixmap.scaled(logo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }
 }
 
-// ==================== Scoreboard ====================
-// (updateScoreboard())
+void TicTacToe::makeMove(int index) {
+    if (board[index] != EMPTY) return;
+
+    board[index] = currentPlayer;
+    moveHistory.push_back(index);
+    updateBoard();
+
+    if (checkWin(currentPlayer)) {
+        if (currentPlayer == PLAYER1) player1Wins++;
+        else player2Wins++;
+        updateScoreboard();
+
+        if (player1Wins >= gamesToWin || player2Wins >= gamesToWin) {
+            QString winner = player1Wins >= gamesToWin ? player1Name : player2Name;
+            gameOver(QString("%1 wins the series %2-%3!")
+                         .arg(winner)
+                         .arg(qMax(player1Wins, player2Wins))
+                         .arg(qMin(player1Wins, player2Wins)), true);
+            return;
+        }
+
+        if ((player1Wins + player2Wins + ties) >= totalGames) {
+            if (player1Wins > player2Wins) {
+                gameOver(QString("%1 wins the series %2-%3!")
+                             .arg(player1Name).arg(player1Wins).arg(player2Wins), true);
+            } else if (player2Wins > player1Wins) {
+                gameOver(QString("%1 wins the series %2-%3!")
+                             .arg(player2Name).arg(player2Wins).arg(player1Wins), true);
+            } else {
+                gameOver("Series ended in a tie!", true);
+            }
+            return;
+        }
+
+        gameOver(QString("%1 (%2) wins!").arg(currentPlayer == PLAYER1 ? player1Name : player2Name).arg(currentPlayer));
+        return;
+    }
+
+    if (checkTie()) {
+        ties++;
+        updateScoreboard();
+
+        if ((player1Wins + player2Wins + ties) >= totalGames) {
+            if (player1Wins > player2Wins) {
+                gameOver(QString("%1 wins the series %2-%3!")
+                             .arg(player1Name).arg(player1Wins).arg(player2Wins), true);
+            } else if (player2Wins > player1Wins) {
+                gameOver(QString("%1 wins the series %2-%3!")
+                             .arg(player2Name).arg(player2Wins).arg(player1Wins), true);
+            } else {
+                gameOver("Series ended in a tie!", true);
+            }
+            return;
+        }
+
+        gameOver("It's a tie!");
+        return;
+    }
+
+    // Switch players
+    currentPlayer = (currentPlayer == PLAYER1) ? PLAYER2 : PLAYER1;
+    updateStatus();
+
+    // If it's the AI's turn in PvAI mode, schedule the AI move
+    if (mode == 2 && currentPlayer == PLAYER1) {
+        QTimer::singleShot(500, this, [this]() { makeAIMove(); });
+    }
+}
+
+// ==================== AI Logic ====================
+void TicTacToe::makeAIMove() {
+    int move = -1;
+
+    if (difficulty == 1) {
+        move = easyMove();
+    } else if (difficulty == 2) {
+        move = mediumMove();
+    } else if (difficulty == 3) {
+        move = hardMove();
+    }
+
+    if (move != -1) {
+        makeMove(move);
+    }
+}
+int TicTacToe::easyMove() {
+    std::vector<int> availableMoves;
+    std::vector<int> moveScores;
+
+    // Analyze each possible move
+    for (int i = 0; i < 9; i++) {
+        if (board[i] == EMPTY) {
+            availableMoves.push_back(i);
+            std::vector<char> tempBoard = board; // Create a copy
+            tempBoard[i] = PLAYER1; // Try the move for the AI
+            int score = minimax(tempBoard, false); // Get the minimax score
+            moveScores.push_back(score);
+        }
+    }
+
+    // For easy difficulty: Avoid moves with score = 1 (winning moves for AI)
+    std::vector<int> safeMoves;
+    for (size_t i = 0; i < availableMoves.size(); i++) {
+        if (moveScores[i] != 1) {
+            safeMoves.push_back(availableMoves[i]);
+        }
+    }
+
+    // Prefer moves with score = -1 (blocking moves)
+    for (size_t i = 0; i < safeMoves.size(); i++) {
+        int index = std::find(availableMoves.begin(), availableMoves.end(), safeMoves[i]) - availableMoves.begin();
+        if (moveScores[index] == -1) {
+            return safeMoves[i];
+        }
+    }
+
+    // If not found, choose moves with score = 0
+    for (size_t i = 0; i < safeMoves.size(); i++) {
+        int index = std::find(availableMoves.begin(), availableMoves.end(), safeMoves[i]) - availableMoves.begin();
+        if (moveScores[index] == 0) {
+            return safeMoves[i];
+        }
+    }
+
+    // Otherwise, pick a fallback move
+    return safeMoves.empty() ? availableMoves[0] : safeMoves[0];
+}
+
+int TicTacToe::mediumMove() {
+    std::vector<int> availableMoves;
+    for (int i = 0; i < 9; i++) {
+        if (board[i] == EMPTY) {
+            availableMoves.push_back(i);
+        }
+    }
+
+    // Randomly choose one of the available moves
+    if (!availableMoves.empty()) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, availableMoves.size() - 1);
+        return availableMoves[dis(gen)];
+    }
+    return -1; // No move available
+}
+
+int TicTacToe::hardMove() {
+    int move = -1;
+
+    if (!firstMoveMade) {
+        // Count filled cells to check who started
+        int filledCount = 0;
+        for (char c : board) {
+            if (c != EMPTY) filledCount++;
+        }
+
+        // If the board is empty, AI is starting (choose a random corner)
+        if (filledCount == 0) {
+            std::vector<int> corners = {0, 2, 6, 8};
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0, corners.size() - 1);
+            move = corners[dis(gen)];
+        } else {
+            // Otherwise, the first move is by the player:
+            // Always choose the center if available, otherwise fallback (choose one of the corners)
+            if (board[4] == EMPTY) {
+                move = 4;
+            } else {
+                std::vector<int> corners = {0, 2, 6, 8};
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<> dis(0, corners.size() - 1);
+                move = corners[dis(gen)];
+            }
+        }
+        firstMoveMade = true;
+    } else {
+        // Standard minimax algorithm for subsequent moves
+        int bestScore = std::numeric_limits<int>::min();
+        for (int i = 0; i < 9; i++) {
+            if (board[i] == EMPTY) {
+                std::vector<char> tempBoard = board; // Create a copy
+                tempBoard[i] = PLAYER1; // AI's move
+                int score = minimax(tempBoard, false);
+                if (score > bestScore) {
+                    bestScore = score;
+                    move = i;
+                }
+            }
+        }
+    }
+    return move;
+}
+
+// Updated minimax function to handle dynamic AI player
+int TicTacToe::minimax(std::vector<char> &tempBoard, bool isMaximizing) {
+    // Create a temporary TicTacToe instance to use checkWin and checkTie
+    std::vector<char> originalBoard = board;
+    board = tempBoard;
+
+    bool aiWins = checkWin(PLAYER1);
+    bool playerWins = checkWin(PLAYER2);
+    bool tie = checkTie();
+
+    board = originalBoard; // Restore original board
+
+    if (aiWins) return 1;   // AI wins
+    if (playerWins) return -1;  // Player wins
+    if (tie) return 0;          // Tie
+
+    int bestScore = isMaximizing ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
+
+    for (int i = 0; i < 9; i++) {
+        if (tempBoard[i] == EMPTY) {
+            tempBoard[i] = isMaximizing ? PLAYER1 : PLAYER2;
+            int score = minimax(tempBoard, !isMaximizing);
+            tempBoard[i] = EMPTY;
+            bestScore = isMaximizing ? std::max(score, bestScore) : std::min(score, bestScore);
+        }
+    }
+    return bestScore;
+}
+
+// ==================== Win / Tie Check ====================
+void TicTacToe::gameOver(const QString &message, bool seriesOver) {
+    statusLabel->setText(message);
+    if (!scoreboardVisible)
+        toggleScoreboard();
+    for (int i = 0; i < 9; i++) {
+        QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
+        if (button) button->setEnabled(false);
+    }
+
+    // Save EVERY game result, not just series results
+    if (!guestMode) {
+        QString winner;
+        QString result;
+
+        // Determine the winner of THIS individual game
+        if (message.contains("wins!")) {
+            // Individual game win
+            if (message.contains(player1Name)) {
+                winner = player1Name;
+                result = "Game Win";
+            } else {
+                winner = player2Name;
+                result = "Game Win";
+            }
+        } else if (message.contains("tie")) {
+            // Individual game tie
+            winner = "-";
+            result = "Game Tie";
+        }
+
+        // Save this individual game result
+        if (!winner.isEmpty()) {
+            saveMatchResult(winner, result);
+        }
+
+        // If this is a series conclusion, save that too
+        if (seriesOver) {
+            QString seriesWinner;
+            QString seriesResult;
+
+            if (player1Wins > player2Wins) {
+                seriesWinner = player1Name;
+                seriesResult = "Series Win";
+            } else if (player2Wins > player1Wins) {
+                seriesWinner = player2Name;
+                seriesResult = "Series Win";
+            } else {
+                seriesWinner = "-";
+                seriesResult = "Series Tie";
+            }
+
+            // Save series result as a separate entry
+            saveMatchResult(seriesWinner, seriesResult);
+        }
+
+        // Stop recording only when series is over
+        if (isRecording && seriesOver) {
+            stopVideoRecording();
+        }
+    }
+
+    if (seriesOver)
+        QTimer::singleShot(3000, this, &TicTacToe::backToModeSelection);
+    else
+        QTimer::singleShot(2000, this, &TicTacToe::resetGame);
+}
+
+bool TicTacToe::checkWin(char player) {
+    for (int i = 0; i < 3; i++) {
+        if (board[i*3] == player && board[i*3+1] == player && board[i*3+2] == player) return true;
+    }
+    for (int i = 0; i < 3; i++) {
+        if (board[i] == player && board[i+3] == player && board[i+6] == player) return true;
+    }
+    if (board[0] == player && board[4] == player && board[8] == player) return true;
+    if (board[2] == player && board[4] == player && board[6] == player) return true;
+    return false;
+}
+
+bool TicTacToe::checkTie() {
+    for (int i = 0; i < 9; i++) {
+        if (board[i] == EMPTY) return false;
+    }
+    return true;
+}
+
+bool TicTacToe::isMatchUnfinished() {
+    return !checkWin(PLAYER1) && !checkWin(PLAYER2) && !checkTie();
+}
+
+// ==================== Board / UI Updates ====================
+void TicTacToe::updateBoard() {
+    for (int i = 0; i < 9; i++) {
+        QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
+        if (button) {
+            QChar symbol = board[i];
+            button->setText(symbol == EMPTY ? "" : QString(symbol));
+            if (symbol == 'X') {
+                button->setStyleSheet(button->styleSheet() + "color: red; font-family: 'Georgia'; font-size: 28px;");
+            } else if (symbol == 'O') {
+                button->setStyleSheet(button->styleSheet() + "color: blue; font-family: 'Comic Sans MS'; font-size: 28px;");
+            }
+        }
+    }
+}
+
+void TicTacToe::updateStatus() {
+    QString playerName = (currentPlayer == PLAYER1) ? player1Name : player2Name;
+    if (!loggedInUser.isEmpty()) {
+        statusLabel->setText(QString("%1's turn (%2)").arg(playerName).arg(currentPlayer));
+    } else {
+        statusLabel->setText(QString("Player %1's turn").arg(currentPlayer));
+    }
+}
+
 void TicTacToe::updateScoreboard() {
     QString scoreText = QString("<table width='100%'>"
                                 "<tr><th align='left'>%1 (X)</th><th align='center'>Ties</th><th align='right'>%2 (O)</th></tr>"
@@ -462,414 +520,6 @@ void TicTacToe::updateScoreboard() {
     scoreLabel->setText(scoreText);
 }
 
-// ==================== Login / Logout ====================
-// (handleLogin(), logout(), backToModeSelection())
-void TicTacToe::handleLogin() {
-    QString username = usernameEdit->text();
-    QString password = passwordEdit->text();
-    currentUsername = usernameEdit->text() ;
-    if (username.isEmpty() || password.isEmpty()) {
-        QMessageBox::warning(this, "Login Failed", "Username and password cannot be empty!");
-        return;
-    }
-
-    QSqlQuery query;
-    query.prepare("SELECT * FROM users WHERE username = :username AND password = :password");
-    query.bindValue(":username", username);
-    query.bindValue(":password", password);
-    if (query.exec() && query.next()) {
-        loggedInUser = username;
-        guestMode = false;
-        stackedWidget->setCurrentIndex(1); // Go to mode selection
-
-        // MODIFIED: Show history button for logged-in users
-        QPushButton *historyButton = findChild<QPushButton *>("View Match History");
-        if (historyButton) historyButton->show();
-
-        usernameEdit->clear(); // MODIFIED: Clear after use
-        passwordEdit->clear();
-    } else {
-        QMessageBox::warning(this, "Login Failed", "Invalid username or password!");
-    }
-}
-
-void TicTacToe::logout() {
-    loggedInUser.clear();
-    guestMode = false;
-    usernameEdit->clear();
-    passwordEdit->clear();
-    stackedWidget->setCurrentIndex(0); // Back to login screen
-}
-
-
-void TicTacToe::backToModeSelection() {
-    player1Wins = 0;
-    player2Wins = 0;
-    ties = 0;
-    updateScoreboard();
-    stackedWidget->setCurrentIndex(1); // Go back to mode selection screen
-}
-// ==================== Mode Selection ====================
-// (setPlayerVsPlayer(), setPlayerVsAI(), setDifficultyEasy(), setDifficultyMedium(), setDifficultyHard())
-void TicTacToe::setPlayerVsPlayer() {
-    mode = 1;
-    stackedWidget->setCurrentIndex(5); // Go to game settings screen
-}
-
-void TicTacToe::setPlayerVsAI() {
-    mode = 2;
-    stackedWidget->setCurrentIndex(3); // Go to game settings screen
-}
-
-void TicTacToe::setDifficultyEasy() {
-    difficulty = 1;
-    stackedWidget->setCurrentIndex(5); // Go to game settings screen
-}
-
-void TicTacToe::setDifficultyMedium() {
-    difficulty = 2;
-    stackedWidget->setCurrentIndex(5); // Go to game settings screen
-}
-
-void TicTacToe::setDifficultyHard() {
-    difficulty = 3;
-    stackedWidget->setCurrentIndex(5); // Go to game settings screen
-}
-// ==================== Game Settings and Start ====================
-// (applyGameSettings(), startPvPWithNames())
-
-void TicTacToe::applyGameSettings() {
-    totalGames = totalGamesSpinBox->value();
-    gamesToWin = gamesToWinSpinBox->value();
-
-    if (gamesToWin > totalGames) {
-        QMessageBox::warning(this, "Invalid Settings", "Games to win cannot be greater than total games!");
-        return;
-    }
-
-    if (mode == 1) {
-        // MODIFIED: Guest mode skips name entry and uses default names
-        if (guestMode) {
-            player1Name = "Player 1";
-            player2Name = "Player 2";
-            stackedWidget->setCurrentIndex(2); // Go directly to game screen
-            resetGame();
-        } else {
-            stackedWidget->setCurrentIndex(4); // Go to player name input screen
-        }
-    } else {
-        stackedWidget->setCurrentIndex(2); // Go to game screen
-        player1Name = "AI";
-        player2Name = loggedInUser.isEmpty() ? "Player" : loggedInUser;
-        resetGame();
-    }
-}
-void TicTacToe::startPvPWithNames() {
-    QString player2InputName = player2NameEdit->text();
-    if (!player2InputName.isEmpty()) {
-        player2Name = player2InputName;
-    } else {
-        player2Name = "Player 2";
-    }
-    player2NameEdit->clear();
-    player1Name = loggedInUser.isEmpty() ? "Player 1" : loggedInUser;
-    stackedWidget->setCurrentIndex(2); // Go to game screen
-    resetGame();
-}
-// ==================== Core Game Logic ====================
-// (resetGame(), makeMove(), makeAIMove(), easyMove(), mediumMove(), hardMove(), minimax())
-void TicTacToe::resetGame() {
-    // Check if the series is already over
-    if (player1Wins >= gamesToWin || player2Wins >= gamesToWin ||
-        (player1Wins + player2Wins + ties) >= totalGames) {
-        backToModeSelection();
-        return;
-    }
-
-    board = std::vector<char>(9, EMPTY);
-    firstMoveMade = false;
-
-    scoreboardVisible = false;
-    scoreLabel->setVisible(scoreboardVisible);
-    if (scoreboardToggleButton) {
-        scoreboardToggleButton->setText("Show Scoreboard");
-    }
-
-    if (mode == 2) {
-        player1Name = "AI";
-        player2Name = loggedInUser.isEmpty() ? "Player" : loggedInUser;
-    }
-
-    updateScoreboard();
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    if (gen() % 2 == 0) {
-        currentPlayer = PLAYER1;
-        if (mode == 2) {
-            QTimer::singleShot(500, this, [this]() { makeAIMove(); });
-        }
-    } else {
-        currentPlayer = PLAYER2;
-    }
-
-    for (int i = 0; i < 9; i++) {
-        QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
-        if (button) {
-            button->setText("");
-            button->setEnabled(true);
-        }
-    }
-
-    updateStatus();
-}
-void TicTacToe::makeMove(int index) {
-    if (board[index] != EMPTY) return;
-    board[index] = currentPlayer;
-    updateBoard();
-
-    if (checkWin(currentPlayer)) {
-        if (currentPlayer == PLAYER1) player1Wins++;
-        else player2Wins++;
-        updateScoreboard();
-
-        // Check if either player has won the series
-        if (player1Wins >= gamesToWin || player2Wins >= gamesToWin) {
-            QString winner = player1Wins >= gamesToWin ? player1Name : player2Name;
-            gameOver(QString("%1 wins the series %2-%3!")
-                         .arg(winner)
-                         .arg(qMax(player1Wins, player2Wins))
-                         .arg(qMin(player1Wins, player2Wins)), true);
-            return;
-        }
-
-        // Check if maximum games reached
-        if ((player1Wins + player2Wins + ties) >= totalGames) {
-            if (player1Wins > player2Wins) {
-                gameOver(QString("%1 wins the series %2-%3!")
-                             .arg(player1Name)
-                             .arg(player1Wins)
-                             .arg(player2Wins), true);
-            } else if (player2Wins > player1Wins) {
-                gameOver(QString("%1 wins the series %2-%3!")
-                             .arg(player2Name)
-                             .arg(player2Wins)
-                             .arg(player1Wins), true);
-            } else {
-                gameOver("Series ended in a tie!", true);
-            }
-            return;
-        }
-
-        gameOver(QString("%1 (%2) wins!").arg(currentPlayer == PLAYER1 ? player1Name : player2Name).arg(currentPlayer));
-        return;
-    }
-
-    if (checkTie()) {
-        ties++;
-        updateScoreboard();
-        // Check if maximum games reached
-        if ((player1Wins + player2Wins + ties) >= totalGames) {
-            if (player1Wins > player2Wins) {
-                gameOver(QString("%1 wins the series %2-%3!")
-                             .arg(player1Name)
-                             .arg(player1Wins)
-                             .arg(player2Wins), true);
-            } else if (player2Wins > player1Wins) {
-                gameOver(QString("%1 wins the series %2-%3!")
-                             .arg(player2Name)
-                             .arg(player2Wins)
-                             .arg(player1Wins), true);
-            } else {
-                gameOver("Series ended in a tie!", true);
-            }
-            return;
-        }
-
-        gameOver("It's a tie!");
-        return;
-    }
-
-    currentPlayer = (currentPlayer == PLAYER1) ? PLAYER2 : PLAYER1;
-    updateStatus();
-    if (mode == 2 && currentPlayer == PLAYER1) {
-        QTimer::singleShot(500, this, [this]() { makeAIMove(); });
-    }
-}
-void TicTacToe::makeAIMove() {
-    if (difficulty == 1) {
-        easyMove();
-    } else if (difficulty == 2) {
-        mediumMove();
-    } else {
-        hardMove();
-    }
-}
-
-void TicTacToe::easyMove() {
-    std::vector<int> emptySlots;
-    for (int i = 0; i < 9; i++) {
-        if (board[i] == EMPTY) {
-            emptySlots.push_back(i);
-        }
-    }
-
-    if (!emptySlots.empty()) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, emptySlots.size() - 1);
-        int index = emptySlots[dis(gen)];
-        makeMove(index);
-    }
-}
-
-void TicTacToe::mediumMove() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 100);
-
-    if (dis(gen) < 50) {
-        hardMove();
-    } else {
-        easyMove();
-    }
-}
-
-void TicTacToe::hardMove() {
-    int bestScore = std::numeric_limits<int>::min();
-    int bestMove = -1;
-    for (int i = 0; i < 9; i++) {
-        if (board[i] == EMPTY) {
-            board[i] = PLAYER1;
-            int score = minimax(0, false);
-            board[i] = EMPTY;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = i;
-            }
-        }
-    }
-
-    if (bestMove != -1) {
-        makeMove(bestMove);
-    }
-}
-
-int TicTacToe::minimax(int depth, bool isMaximizing) {
-    if (checkWin(PLAYER1)) return 10 - depth;
-    if (checkWin(PLAYER2)) return depth - 10;
-    if (checkTie()) return 0;
-    if (isMaximizing) {
-        int bestScore = std::numeric_limits<int>::min();
-        for (int i = 0; i < 9; i++) {
-            if (board[i] == EMPTY) {
-                board[i] = PLAYER1;
-                int score = minimax(depth + 1, false);
-                board[i] = EMPTY;
-                bestScore = std::max(score, bestScore);
-            }
-        }
-        return bestScore;
-    } else {
-        int bestScore = std::numeric_limits<int>::max();
-        for (int i = 0; i < 9; i++) {
-            if (board[i] == EMPTY) {
-                board[i] = PLAYER2;
-                int score = minimax(depth + 1, true);
-                board[i] = EMPTY;
-                bestScore = std::min(score, bestScore);
-            }
-        }
-        return bestScore;
-    }
-}
-
-
-// ==================== Win / Tie Check ====================
-// (checkWin(), checkTie(), gameOver())
-void TicTacToe::gameOver(const QString &message, bool seriesOver) {
-    statusLabel->setText(message);
-    if (!scoreboardVisible)
-        toggleScoreboard();
-    for (int i = 0; i < 9; i++) {
-        QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
-        if (button) button->setEnabled(false);
-    }
-
-    if (!guestMode && seriesOver) {
-        QString winner;
-        QString result;
-
-        if (player1Wins > player2Wins) {
-            winner = player1Name;
-            result = (player1Name == "AI") ? "Defeat" : "Win";
-        } else if (player2Wins > player1Wins) {
-            winner = player2Name;
-            result = (player2Name == "AI") ? "Defeat" : "Win";
-        } else {
-            winner = "-";
-            result = "Tie";
-        }
-
-        saveMatchResult(winner, result);
-    }
-
-    if (seriesOver)
-        QTimer::singleShot(3000, this, &TicTacToe::backToModeSelection);
-    else
-        QTimer::singleShot(2000, this, &TicTacToe::resetGame);
-}
-bool TicTacToe::checkWin(char player) {
-    for (int i = 0; i < 3; i++) {
-        if (board[i*3] == player && board[i*3+1] == player && board[i*3+2] == player) {
-            return true;
-        }
-    }
-
-    for (int i = 0; i < 3; i++) {
-        if (board[i] == player && board[i+3] == player && board[i+6] == player) {
-            return true;
-        }
-    }
-
-    if (board[0] == player && board[4] == player && board[8] == player) {
-        return true;
-    }
-    if (board[2] == player && board[4] == player && board[6] == player) {
-        return true;
-    }
-
-    return false;
-}
-
-bool TicTacToe::checkTie() {
-    for (int i = 0; i < 9; i++) {
-        if (board[i] == EMPTY) {
-            return false;
-        }
-    }
-    return true;
-}
-// ==================== Board / UI Updates ====================
-// (updateBoard(), updateStatus(), toggleNightMode(), toggleScoreboard())
-void TicTacToe::updateBoard() {
-    for (int i = 0; i < 9; i++) {
-        QPushButton *button = qobject_cast<QPushButton *>(buttonGroup->button(i));
-        if (button) {
-            button->setText(board[i] == EMPTY ? "" : QString(board[i]));
-        }
-    }
-}
-
-void TicTacToe::updateStatus() {
-    QString playerName = (currentPlayer == PLAYER1) ? player1Name : player2Name;
-    if (!loggedInUser.isEmpty()) {
-        statusLabel->setText(QString("%1's turn (%2)").arg(playerName).arg(currentPlayer));
-    } else {
-        statusLabel->setText(QString("Player %1's turn").arg(currentPlayer));
-    }
-}
 void TicTacToe::toggleScoreboard() {
     scoreboardVisible = !scoreboardVisible;
     scoreLabel->setVisible(scoreboardVisible);
@@ -879,127 +529,231 @@ void TicTacToe::toggleScoreboard() {
 }
 
 // ==================== Button Handler ====================
-// (handleButtonClick())
 void TicTacToe::handleButtonClick(int index) {
+    // Prevent move if the cell is not empty or in PvAI mode during AI's turn
     if (board[index] != EMPTY || (mode == 2 && currentPlayer == PLAYER1)) return;
     makeMove(index);
-}
-void TicTacToe::connectToDatabase() {
-    db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("tictactoe.db");
-    if (!db.open()) {
-        QMessageBox::critical(this, "Database Error", "Failed to open database!");
-    }
-}
-
-void TicTacToe::createTablesIfNeeded() {
-    QSqlQuery query;
-    query.exec("CREATE TABLE IF NOT EXISTS users ("
-               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-               "username TEXT UNIQUE NOT NULL,"
-               "password TEXT NOT NULL)");
-    query.exec("CREATE TABLE IF NOT EXISTS matches ("
-               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-               "player1 TEXT,"
-               "player2 TEXT,"
-               "winner TEXT,"
-               "result TEXT,"
-               "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-}
-
-
-void TicTacToe::saveMatchResult(const QString &winner, const QString &resultText) {
-    if (!db.isOpen()) return;
-    QString emojiResult;
-    if (resultText == "Win") {
-        emojiResult = "🏆"; // Trophy
-    } else if (resultText == "Defeat") {
-        emojiResult = "💀"; // Skull
-    } else if (resultText == "Tie") {
-        emojiResult = "🤝"; // Handshake
-    } else if (resultText == "Surrender") {
-        emojiResult = "🏳️"; // White flag
-    } else {
-        emojiResult = resultText;
-    }
-
-    QSqlQuery query;
-    query.prepare("INSERT INTO matches (player1, player2, winner, result) "
-                  "VALUES (:player1, :player2, :winner, :result)");
-    query.bindValue(":player1", player1Name);
-    query.bindValue(":player2", player2Name);
-    query.bindValue(":winner", winner);
-    query.bindValue(":result", emojiResult);
-    query.exec();
-}
-void TicTacToe::loadMatchHistory() {
-    matchHistoryTable->clearContents();
-    matchHistoryTable->setRowCount(0);
-
-    QSqlQuery query;
-    query.prepare("SELECT player1, player2, winner, result, timestamp "
-                  "FROM matches WHERE player1 = :user OR player2 = :user "
-                  "ORDER BY timestamp DESC");
-    query.bindValue(":user", currentUsername);
-    query.exec();
-
-    int row = 0;
-    while (query.next()) {
-        matchHistoryTable->insertRow(row);
-        for (int col = 0; col < 5; ++col) {
-            QString text = query.value(col == 0 ? 4 : col - 1).toString(); // timestamp first
-            QTableWidgetItem *item = new QTableWidgetItem(text);
-            item->setTextAlignment(Qt::AlignCenter);
-            matchHistoryTable->setItem(row, col, item);
-        }
-        ++row;
-    }
-
-    stackedWidget->setCurrentIndex(6); // Switch to match history screen
-}
-void TicTacToe::registerAccount() {
-    QString username = usernameEdit->text();
-    QString password = passwordEdit->text();
-    if (username.isEmpty() || password.isEmpty()) {
-        QMessageBox::warning(this, "Registration Failed", "Username and password cannot be empty!");
-        return;
-    }
-
-    QSqlQuery query;
-    query.prepare("INSERT INTO users (username, password) VALUES (:username, :password)");
-    query.bindValue(":username", username);
-    query.bindValue(":password", password);
-    if (!query.exec()) {
-        QMessageBox::warning(this, "Registration Failed", "Username already exists!");
-        usernameEdit->clear();
-        passwordEdit->clear();
-    } else {
-        QMessageBox::information(this, "Registration Success", "Account created successfully!");
-        usernameEdit->clear();
-        passwordEdit->clear();
-    }
-}
-void TicTacToe::guestLogin() {
-    loggedInUser = "Player 1";
-    guestMode = true;
-    stackedWidget->setCurrentIndex(1); // Mode selection
-    usernameEdit->clear(); // MODIFIED: Clear after use
-    passwordEdit->clear();
-
-    // MODIFIED: Hide history button for guests
 }
 void TicTacToe::handleSurrender() {
     QString winner;
     QString result = "Surrender";
-
     if (mode == 2) {
         winner = (currentPlayer == PLAYER2) ? "AI" : player2Name;
     } else {
         winner = (currentPlayer == PLAYER1) ? player2Name : player1Name;
     }
-
     saveMatchResult(winner, result);
-    QMessageBox::information(this, "Surrender", QString("🏳️ %1 wins by surrender!").arg(winner));
+
+    if (isRecording) {
+        stopVideoRecording();
+    }
+
+    QMessageBox::information(this, "Surrender", QString::fromUtf8(u8"🏳️ %1 wins by surrender!").arg(winner));
     backToModeSelection();
 }
 
+void TicTacToe::backToModeSelection() {
+    if (isRecording) {
+        stopVideoRecording();
+    }
+
+    player1Wins = 0;
+    player2Wins = 0;
+    ties = 0;
+    updateScoreboard();
+    stackedWidget->setCurrentIndex(1);
+}
+
+// ==================== Video Recording Functions ====================
+void TicTacToe::setupVideoRecording() {
+    // Create components but don't connect them yet
+    mediaRecorder = new QMediaRecorder(this);
+    captureSession = new QMediaCaptureSession(this);
+    screenCapture = new QScreenCapture(this);
+
+    // DO NOT set up the capture session yet - only when recording starts
+    // captureSession->setScreenCapture(screenCapture);  // Remove this line
+    // captureSession->setRecorder(mediaRecorder);       // Remove this line
+
+    mediaRecorder->setQuality(QMediaRecorder::HighQuality);
+    mediaRecorder->setVideoFrameRate(30);
+
+    connect(mediaRecorder, &QMediaRecorder::recorderStateChanged, this, [this](QMediaRecorder::RecorderState state) {
+        if (state == QMediaRecorder::StoppedState) {
+            onRecordingFinished();
+        }
+    });
+
+    connect(mediaRecorder, &QMediaRecorder::errorOccurred, this, &TicTacToe::onRecordingError);
+
+    // Explicitly ensure everything is stopped
+    isRecording = false;
+
+    // Make sure nothing is active
+    if (screenCapture->isActive()) {
+        screenCapture->stop();
+    }
+
+    if (mediaRecorder->recorderState() != QMediaRecorder::StoppedState) {
+        mediaRecorder->stop();
+    }
+
+    qDebug() << "Video recording setup completed - NOT recording";
+}
+
+void TicTacToe::setupVideoPlayback() {
+    videoPlayer = new QMediaPlayer(this);
+    audioOutput = new QAudioOutput(this);
+    videoWidget = new QVideoWidget();
+
+    videoPlayer->setVideoOutput(videoWidget);
+    videoPlayer->setAudioOutput(audioOutput);
+
+    connect(videoPlayer, &QMediaPlayer::positionChanged, this, &TicTacToe::onVideoPositionChanged);
+    connect(videoPlayer, &QMediaPlayer::durationChanged, this, &TicTacToe::onVideoDurationChanged);
+}
+
+void TicTacToe::createVideoDirectory() {
+    videoDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/TicTacToe_Videos";
+    QDir dir;
+    if (!dir.exists(videoDirectory)) {
+        dir.mkpath(videoDirectory);
+    }
+}
+
+QString TicTacToe::generateVideoFileName() {
+    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd_hh-mm-ss");
+    QString filename = QString("TicTacToe_Match_%1_%2_vs_%3.mp4")
+                           .arg(timestamp)
+                           .arg(player1Name.replace(" ", "_"))
+                           .arg(player2Name.replace(" ", "_"));
+    return QDir(videoDirectory).absoluteFilePath(filename);
+}
+
+void TicTacToe::startVideoRecording() {
+    if (isRecording) {
+        qDebug() << "Already recording, ignoring start request";
+        return;
+    }
+
+    qDebug() << "Starting video recording...";
+
+    // Set up the capture session only when starting recording
+    captureSession->setScreenCapture(screenCapture);
+    captureSession->setRecorder(mediaRecorder);
+
+    currentVideoPath = generateVideoFileName();
+    mediaRecorder->setOutputLocation(QUrl::fromLocalFile(currentVideoPath));
+
+    // Start screen capture first
+    screenCapture->start();
+
+    // Then start recording
+    mediaRecorder->record();
+
+    isRecording = true;
+    recordButton->setText("Stop Recording");
+    recordingStatusLabel->setText("🔴 Recording...");
+    recordingStatusLabel->setStyleSheet("color: red; font-weight: bold;");
+
+    qDebug() << "Recording started to:" << currentVideoPath;
+}
+
+void TicTacToe::stopVideoRecording() {
+    if (!isRecording) {
+        qDebug() << "Not recording, ignoring stop request";
+        return;
+    }
+
+    qDebug() << "Stopping video recording...";
+
+    // Stop recording first
+    if (mediaRecorder->recorderState() != QMediaRecorder::StoppedState) {
+        mediaRecorder->stop();
+    }
+
+    // Stop screen capture
+    if (screenCapture->isActive()) {
+        screenCapture->stop();
+    }
+
+    // Disconnect the capture session to prevent auto-restart
+    captureSession->setScreenCapture(nullptr);
+    captureSession->setRecorder(nullptr);
+
+    isRecording = false;
+    recordButton->setText("Start Recording");
+    recordingStatusLabel->setText("⚫ Not Recording");
+    recordingStatusLabel->setStyleSheet("color: gray;");
+
+    qDebug() << "Recording stopped";
+}
+void TicTacToe::onRecordingFinished() {
+    if (!currentVideoPath.isEmpty() && currentMatchId > 0) {
+        updateVideoDatabase(currentMatchId, currentVideoPath);
+    }
+    recordingStatusLabel->setText("✅ Recording Saved");
+    recordingStatusLabel->setStyleSheet("color: green; font-weight: bold;");
+
+    QTimer::singleShot(3000, this, [this]() {
+        recordingStatusLabel->setText("⚫ Not Recording");
+        recordingStatusLabel->setStyleSheet("color: gray;");
+    });
+}
+
+void TicTacToe::onRecordingError() {
+    QMessageBox::warning(this, "Recording Error", "Failed to record video: " + mediaRecorder->errorString());
+    isRecording = false;
+    recordButton->setText("Start Recording");
+    recordingStatusLabel->setText("❌ Recording Failed");
+    recordingStatusLabel->setStyleSheet("color: red;");
+}
+
+void TicTacToe::updateVideoDatabase(int matchId, const QString &videoPath) {
+    QSqlQuery query;
+    query.prepare("UPDATE matches SET video_path = :video_path WHERE id = :id");
+    query.bindValue(":video_path", videoPath);
+    query.bindValue(":id", matchId);
+
+    if (!query.exec()) {
+        qDebug() << "Failed to update video path in database:" << query.lastError().text();
+    }
+}
+
+// ==================== Video Playback Functions ====================
+void TicTacToe::playRecordedVideo() {
+    if (currentVideoPath.isEmpty() || !QFile::exists(currentVideoPath)) {
+        QMessageBox::warning(this, "Video Error", "Video file not found.");
+        return;
+    }
+
+    videoPlayer->setSource(QUrl::fromLocalFile(currentVideoPath));
+    videoWidget->show();
+    videoWidget->resize(800, 600);
+    videoPlayer->play();
+
+    playVideoButton->setText("Pause Video");
+    stopVideoButton->show();
+}
+
+void TicTacToe::stopVideoPlayback() {
+    videoPlayer->stop();
+    videoWidget->hide();
+    playVideoButton->setText("Play Video");
+    stopVideoButton->hide();
+    videoStatusLabel->setText("Video stopped");
+}
+
+void TicTacToe::onVideoPositionChanged(qint64 position) {
+    if (videoPlayer->duration() > 0) {
+        int progress = (position * 100) / videoPlayer->duration();
+        videoStatusLabel->setText(QString("Video: %1%").arg(progress));
+        if (videoProgressSlider) {
+            videoProgressSlider->setValue(progress);
+        }
+    }
+}
+
+void TicTacToe::onVideoDurationChanged(qint64 duration) {
+    Q_UNUSED(duration)
+}

@@ -3,21 +3,7 @@
 
 #include <QMainWindow>
 
-QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
-QT_END_NAMESPACE
+// This header is required by the .pro file
+// but we're using TicTacToe as our main window class
 
-class MainWindow : public QMainWindow
-{
-    Q_OBJECT
-
-public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
-
-private:
-    Ui::MainWindow *ui;
-};
 #endif // MAINWINDOW_H
