@@ -11,91 +11,6 @@ on:
       - master
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: List project files
-      run: |
-        echo "Project root contents:"
-        ls -la
-        echo "Looking for .pro files:"
-        find . -name "*.pro" -type f
-      
-    - name: Install Qt 6 using aqt
-      run: |
-        python -m pip install --upgrade pip
-        pip install aqtinstall
-        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
-        
-    - name: Set Qt environment
-      run: |
-        echo "${{ github.workspace }}/6.5.0/gcc_64/bin" >> $GITHUB_PATH
-        echo "QT_ROOT_DIR=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
-        echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/6.5.0/gcc_64" >> $GITHUB_ENV
-        
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          libgl1-mesa-dev \
-          libglu1-mesa-dev \
-          libxkbcommon-x11-0 \
-          libxcb-icccm4 \
-          libxcb-image0 \
-          libxcb-keysyms1 \
-          libxcb-randr0 \
-          libxcb-render-util0 \
-          libxcb-xinerama0 \
-          libxcb-xfixes0 \
-          xvfb
-          
-    - name: Set up virtual display
-      run: |
-        export DISPLAY=:99
-        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-        sleep 3
-        
-    - name: Generate Makefile using qmake
-      run: |
-        ls -la *.pro
-        qmake --version
-        qmake TTC_with_vids.pro
-        
-    - name: Build project
-      run: |
-        make -j$(nproc)
-        
-    - name: List build output
-      run: |
-        ls -la
-        find . -name "TTC*" -type f -executable
-        
-    - name: Test build (basic check)
-      run: |
-        export DISPLAY=:99
-        EXECUTABLE=$(find . -name "TTC*" -type f -executable | head -1)
-        if [ -n "$EXECUTABLE" ]; then
-          echo "Found executable: $EXECUTABLE"
-          timeout 10s $EXECUTABLE --version || echo "Quick test completed"
-        else
-          echo "No executable found with TTC prefix"
-          ls -la
-        fi
-        
-    - name: Upload Linux build
-      uses: actions/upload-artifact@v4
-      with:
-        name: tictactoe-linux-${{ github.sha }}
-        path: |
-          TTC_with_vids
-          TTC*
-        if-no-files-found: warn
-
   build-windows:
     runs-on: windows-latest
     
@@ -172,45 +87,8 @@ jobs:
           TTC*
         if-no-files-found: warn
 
-  test:
-    needs: build-linux
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: tictactoe-linux-${{ github.sha }}
-        path: ./build
-        
-    - name: Install Qt 6 runtime
-      run: |
-        python -m pip install --upgrade pip
-        pip install aqtinstall
-        aqt install-qt linux desktop 6.5.0 gcc_64 -m qtmultimedia
-        
-    - name: Set up virtual display for testing
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb libxkbcommon-x11-0
-        export DISPLAY=:99
-        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-        sleep 3
-        
-    - name: Run basic tests
-      run: |
-        export DISPLAY=:99
-        export LD_LIBRARY_PATH="${{ github.workspace }}/6.5.0/gcc_64/lib:$LD_LIBRARY_PATH"
-        cd build
-        chmod +x TTC* 2>/dev/null || true
-        echo "Tests would run here"
-
   release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-windows, build-macos]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     permissions:
@@ -228,13 +106,6 @@ jobs:
     - name: Prepare release assets
       run: |
         mkdir -p release
-        
-        # Linux build
-        if [ -d "artifacts/tictactoe-linux-${{ github.sha }}" ]; then
-          cd "artifacts/tictactoe-linux-${{ github.sha }}"
-          tar -czf ../../release/tictactoe-linux-x64.tar.gz *
-          cd ../..
-        fi
         
         # Windows build
         if [ -d "artifacts/tictactoe-windows-${{ github.sha }}" ]; then
@@ -276,7 +147,6 @@ jobs:
           ${{ github.event.head_commit.message }}
           
           ### Downloads
-          - **Linux:** tictactoe-linux-x64.tar.gz
           - **Windows:** tictactoe-windows-x64.zip  
           - **macOS:** tictactoe-macos-x64.tar.gz
           
