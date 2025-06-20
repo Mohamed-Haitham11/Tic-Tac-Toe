@@ -110,7 +110,7 @@ void TicTacToe::resetGame() {
     }
 
     for (int i = 0; i < 9; i++) {
-        QPushButton *button = qobject_cast<QPushButton*>(buttonGroup->button(i));
+        QPushButton button = qobject_cast<QPushButton>(buttonGroup->button(i));
         if (button) {
             button->setText("");
             button->setEnabled(true);
@@ -484,4 +484,3 @@ void TicTacToe::updateScoreboard() {
                             .arg(gamesToWin);
     scoreLabel->setText(scoreText);
 }
-
