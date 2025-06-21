@@ -2,6 +2,8 @@ QT       += core gui
 QT += core gui widgets sql testlib
 QT += sql
 QT += core gui widgets sql
+DEFINES += NOMINMAX
+
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
