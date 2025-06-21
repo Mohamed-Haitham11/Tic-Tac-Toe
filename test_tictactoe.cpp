@@ -194,21 +194,24 @@ void TestTicTacToe::testUserRegistrationInDatabase()
     QCOMPARE(query.value(0).toString(), "testuser"); // Compare the found username
 }
 
+
+
 void TestTicTacToe::testGameSaveToDatabase()
 {
     game->player1Name = "PlayerOne";
     game->player2Name = "PlayerTwo";
     game->moveHistory = {0, 3, 1, 4, 2}; // A sample move history
     game->gameStartingPlayer = 'X'; // Set a starting player
-    game->saveIndividualGame("PlayerOne", "Win");
+    game->saveIndividualGameWithNumber("PlayerOne", "Win", 1);
+
     QSqlQuery query(game->db);
+    
     query.exec("SELECT winner, result, moves FROM matches WHERE player1 = 'PlayerOne'");
     QVERIFY(query.next()); // Verify we found the saved match
     QCOMPARE(query.value(0).toString(), "PlayerOne");
     QCOMPARE(query.value(1).toString(), "Win");
     QCOMPARE(query.value(2).toString(), "0,3,1,4,2");
 }
-
 void TestTicTacToe::testGuestLogin()
 {
     game->guestLogin();
@@ -364,9 +367,11 @@ void TestTicTacToe::testMatchHistoryPopulation()
     game->loggedInUser = "history_user";
     game->player1Name = "history_user";
     game->player2Name = "AI";
-    game->saveIndividualGame("history_user", "Win");
-    game->saveIndividualGame("AI", "Defeat");
-    game->saveIndividualGame("history_user", "Win");
+
+    game->saveIndividualGameWithNumber("history_user", "Win", 1);
+    game->saveIndividualGameWithNumber("AI", "Defeat", 2);
+    game->saveIndividualGameWithNumber("history_user", "Win", 3);
+
     QPushButton* historyButton = game->findChild<QPushButton*>("View Match History");
     QVERIFY(historyButton != nullptr); // Make sure we found the button.
     QTest::mouseClick(historyButton, Qt::LeftButton);
