@@ -1,5 +1,5 @@
 #include "tictactoe.h"
-#include <windows.h>
+
 #include <psapi.h>
 #include <QDebug>
 
